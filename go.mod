@@ -1,4 +1,4 @@
-module github.com/lynkdb/iomix/datax
+module github.com/lynkdb/lynkx
 
 go 1.22.3
 
