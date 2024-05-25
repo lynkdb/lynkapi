@@ -15,226 +15,178 @@
 package datax
 
 import (
-	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
-	DataSpec_Bool   = "bool"
-	DataSpec_Int    = "int"
-	DataSpec_Uint   = "uint"
-	DataSpec_Float  = "float"
-	DataSpec_String = "string"
-	DataSpec_Struct = "struct"
-
-	DataSpec_Array = "array"
-	DataSpec_Bytes = "bytes"
-
-	DataSpec_ArrayBool   = "array/bool"
-	DataSpec_ArrayInt    = "array/int"
-	DataSpec_ArrayUint   = "array/uint"
-	DataSpec_ArrayFloat  = "array/float"
-	DataSpec_ArrayString = "array/string"
-	DataSpec_ArrayStruct = "array/struct"
+	SpecField_Bool   = "bool"
+	SpecField_Int    = "int"
+	SpecField_Uint   = "uint"
+	SpecField_Float  = "float"
+	SpecField_String = "string"
+	SpecField_Struct = "struct"
+	SpecField_Bytes  = "bytes"
 )
 
-func TryParseMap(obj interface{}) map[string]*structpb.Value {
-
-	m := &structpb.Struct{
-		Fields: map[string]*structpb.Value{},
-	}
-
-	if obj == nil {
-		return m.Fields
-	}
-
-	if reflect.TypeOf(obj).Kind() != reflect.Struct {
-		return m.Fields
-	}
-
-	var (
-		parseStruct func(up *structpb.Struct, rv reflect.Value)
-		parseArray  func(up *structpb.ListValue, rv reflect.Value)
-	)
-
-	parseStruct = func(up *structpb.Struct, rv reflect.Value) {
-
-		if !rv.IsValid() || rv.Type().Kind() != reflect.Struct {
-			return
-		}
-
-		fields := reflect.VisibleFields(rv.Type())
-
-		for _, fd := range fields {
-
-			if fd.Name == "" || fd.Name[0] < 'A' || fd.Name[0] > 'Z' {
-				continue
-			}
-
-			var (
-				name = fd.Name
-				v1   = rv.FieldByIndex(fd.Index)
-				v2   *structpb.Value
-			)
-
-			if sa := strings.Split(fd.Tag.Get("json"), ","); len(sa) > 0 &&
-				sa[0] != "" && sa[0] != "omitempty" {
-				name = sa[0]
-			}
-
-			switch v1.Kind() {
-
-			case reflect.String:
-				v2 = structpb.NewStringValue(v1.String())
-
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				v2 = structpb.NewNumberValue(float64(v1.Int()))
-
-			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				v2 = structpb.NewNumberValue(float64(v1.Uint()))
-
-			case reflect.Float32, reflect.Float64:
-				v2 = structpb.NewNumberValue(v1.Float())
-
-			case reflect.Bool:
-				v2 = structpb.NewBoolValue(v1.Bool())
-
-			case reflect.Struct:
-				st := &structpb.Struct{}
-				v2 = structpb.NewStructValue(st)
-				parseStruct(st, v1)
-
-			case reflect.Pointer:
-				st := &structpb.Struct{}
-				v2 = structpb.NewStructValue(st)
-				parseStruct(st, v1)
-
-			case reflect.Slice:
-				if v1.Len() > 0 {
-					if v1.Index(0).Kind() == reflect.Uint8 {
-						b64 := base64.StdEncoding.EncodeToString(v1.Bytes())
-						v2 = structpb.NewStringValue(b64)
-					} else {
-						ls := &structpb.ListValue{}
-						v2 = structpb.NewListValue(ls)
-						parseArray(ls, v1)
-					}
-				}
-			}
-
-			if v2 != nil {
-				if up.Fields == nil {
-					up.Fields = map[string]*structpb.Value{}
-				}
-				up.Fields[name] = v2
-			}
-		}
-	}
-
-	parseArray = func(up *structpb.ListValue, rv reflect.Value) {
-
-		if !rv.IsValid() || rv.Type().Kind() != reflect.Slice {
-			return
-		}
-
-		n := rv.Cap()
-		for i := 0; i < n; i++ {
-
-			var (
-				v1 = rv.Index(i)
-				v2 *structpb.Value
-			)
-
-			switch v1.Kind() {
-
-			case reflect.String:
-				v2 = structpb.NewStringValue(v1.String())
-
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				v2 = structpb.NewNumberValue(float64(v1.Int()))
-
-			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				v2 = structpb.NewNumberValue(float64(v1.Uint()))
-
-			case reflect.Float32, reflect.Float64:
-				v2 = structpb.NewNumberValue(v1.Float())
-
-			case reflect.Bool:
-				v2 = structpb.NewBoolValue(v1.Bool())
-
-			case reflect.Struct:
-				st := &structpb.Struct{}
-				v2 = structpb.NewStructValue(st)
-				parseStruct(st, v1)
-
-			case reflect.Pointer:
-				st := &structpb.Struct{}
-				v2 = structpb.NewStructValue(st)
-				parseStruct(st, v1)
-
-			case reflect.Slice:
-				ls := &structpb.ListValue{}
-				v2 = structpb.NewListValue(ls)
-				parseArray(ls, v1)
-			}
-
-			if v2 != nil {
-				up.Values = append(up.Values, v2)
-			}
-		}
-	}
-
-	parseStruct(m, reflect.ValueOf(obj))
-
-	return m.Fields
+var specFieldAttrs = map[string]bool{
+	"primary_key":     true,
+	"create_required": true,
+	"update_required": true,
+	"rows":            true,
+	"data_rows":       true,
 }
 
-func ParseSpec(obj interface{}) (*DataSpec, error) {
+type SpecSet struct {
+	mu    sync.RWMutex
+	specs map[string]*RegSpec
+}
+
+type RegSpec struct {
+	Type reflect.Type
+	Spec *Spec
+}
+
+var specSet SpecSet
+
+func (it *Spec) Field(name string) *SpecField {
+	for _, field := range it.Fields {
+		if field.TagName == name || field.Name == name {
+			return field
+		}
+	}
+	return nil
+}
+
+func (it *Spec) Rows(data *structpb.Struct) (*SpecField, *structpb.ListValue) {
+	if len(it.Fields) > 0 && len(data.Fields) > 0 {
+		var field *SpecField
+		for _, specField := range it.Fields {
+			if slices.Contains(specField.Attrs, "rows") &&
+				strings.HasPrefix(specField.Type, "array:") {
+				field = specField
+				break
+			}
+		}
+		if field != nil {
+			if rows, ok := data.Fields[field.TagName]; ok {
+				if lv := rows.GetListValue(); lv != nil {
+					return field, lv
+				}
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (it *Spec) DataMerge(dstObject, srcObject interface{}, opts ...interface{}) (bool, error) {
+	return specDataMerge(it, dstObject, srcObject)
+}
+
+func (it *SpecSet) Register(o interface{}) error {
+	spec, rtype, err := NewSpecFromStruct(o)
+	if err != nil {
+		return err
+	}
+
+	it.mu.Lock()
+	defer it.mu.Unlock()
+
+	if it.specs == nil {
+		it.specs = map[string]*RegSpec{}
+	}
+
+	if _, ok := it.specs[spec.Kind]; !ok {
+		it.specs[spec.Kind] = &RegSpec{
+			Type: rtype,
+			Spec: spec,
+		}
+	}
+
+	return nil
+}
+
+func RegisterSpec(o interface{}) error {
+	return specSet.Register(o)
+}
+
+func (it *SpecSet) Get(kind string) *RegSpec {
+	it.mu.Lock()
+	defer it.mu.Unlock()
+	if spec, ok := it.specs[kind]; ok {
+		return spec
+	}
+	return nil
+}
+
+// SpecField_Array_Value `array:{value type}`
+func specArrayType(t string) string {
+	return "array:" + t
+}
+
+// SpecField_Map_Key_Value `{key type}:{value type}`
+func specMapType(keyType, valueType string) string {
+	return keyType + ":" + valueType
+}
+
+func NewSpecFromStruct(obj interface{}) (*Spec, reflect.Type, error) {
 
 	if obj == nil {
-		return nil, fmt.Errorf("empty object")
+		return nil, nil, fmt.Errorf("empty object")
 	}
 
 	rt := reflect.TypeOf(obj)
 	if rt.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("invalid object type")
+		return nil, nil, fmt.Errorf("invalid object type")
 	}
 
+	return parseSpecByStructType(rt)
+}
+
+func parseSpecByStructType(rt reflect.Type) (*Spec, reflect.Type, error) {
+
 	var (
-		spec        = &DataSpec{}
-		parseStruct func(spec *DataSpec, upOpt *DataSpec_Field, rt reflect.Type)
-		parseArray  func(upOpt *DataSpec_Field, rt reflect.Type)
+		maxDepth = 10
+		baseSpec = &SpecField{
+			Kind: refTypeKind(rt),
+			Name: rt.Name(),
+		}
+		parseStruct func(depth int, pField *SpecField, rt reflect.Type)
+		parseArray  func(depth int, pField *SpecField, rt reflect.Type)
+		parseSet    = map[string]bool{}
 	)
 
-	parseDefaultValue := func(v string, t string) *structpb.Value {
+	parseTagValue := func(v string, t string) *structpb.Value {
 		if v == "" {
 			return nil
 		}
 		switch t {
-		case DataSpec_String:
+		case SpecField_String:
 			return structpb.NewStringValue(v)
 
-		case DataSpec_Int:
+		case SpecField_Int:
 			if i, err := strconv.ParseInt(v, 10, 64); err == nil && i != 0 {
 				return structpb.NewNumberValue(float64(i))
 			}
 
-		case DataSpec_Uint:
+		case SpecField_Uint:
 			if i, err := strconv.ParseUint(v, 10, 64); err == nil && i != 0 {
 				return structpb.NewNumberValue(float64(i))
 			}
 
-		case DataSpec_Float:
+		case SpecField_Float:
 			if f, err := strconv.ParseFloat(v, 64); err == nil && f != 0 {
 				return structpb.NewNumberValue(f)
 			}
 
-		case DataSpec_Bool:
+		case SpecField_Bool:
 			if b, err := strconv.ParseBool(v); err == nil && b == true {
 				return structpb.NewBoolValue(b)
 			}
@@ -243,110 +195,287 @@ func ParseSpec(obj interface{}) (*DataSpec, error) {
 		return nil
 	}
 
-	parseStruct = func(spec *DataSpec, upOpt *DataSpec_Field, rt reflect.Type) {
+	parseValueLimits := func(field *SpecField, fd reflect.StructField) {
 
-		if rt.Kind() != reflect.Struct {
+		if field.Type != SpecField_Int &&
+			field.Type != SpecField_Uint &&
+			field.Type != SpecField_Float {
 			return
 		}
 
-		fields := reflect.VisibleFields(rt)
+		vlimits := strings.TrimSpace(fd.Tag.Get("x_value_limits"))
+		if vlimits == "" {
+			return
+		}
+		ar := strings.Split(vlimits, ",")
+		if len(ar) == 1 {
+			defValue := parseTagValue(ar[1], field.Type)
+			if defValue == nil {
+				return
+			}
+
+			if field.Opts == nil {
+				field.Opts = map[string]*structpb.Value{}
+			}
+
+			field.Opts["def_value"] = defValue
+
+		} else if len(ar) == 3 {
+
+			var (
+				minValue = parseTagValue(ar[0], field.Type)
+				defValue = parseTagValue(ar[1], field.Type)
+				maxValue = parseTagValue(ar[2], field.Type)
+			)
+
+			if minValue == nil || defValue == nil || maxValue == nil {
+				return
+			}
+
+			if minValue.GetNumberValue() > maxValue.GetNumberValue() ||
+				defValue.GetNumberValue() < minValue.GetNumberValue() ||
+				defValue.GetNumberValue() > maxValue.GetNumberValue() {
+				return
+			}
+
+			if field.Opts == nil {
+				field.Opts = map[string]*structpb.Value{}
+			}
+
+			field.Opts["min_value"] = minValue
+			field.Opts["def_value"] = defValue
+			field.Opts["max_value"] = maxValue
+		}
+	}
+
+	parseStruct = func(depth int, pField *SpecField, rt reflect.Type) {
+
+		if depth > maxDepth && rt.Kind() != reflect.Struct {
+			return
+		}
+
+		if pField.Kind != "" {
+			if _, ok := parseSet[pField.Kind]; ok {
+				return
+			}
+			parseSet[pField.Kind] = true
+			defer func() {
+				delete(parseSet, pField.Kind)
+			}()
+		}
+
+		var (
+			fields = reflect.VisibleFields(rt)
+			names  []string
+		)
 
 		for _, fd := range fields {
 
-			if fd.Name == "" || fd.Name[0] < 'A' || fd.Name[0] > 'Z' {
+			if fd.Anonymous || fd.Name == "" ||
+				fd.Name[0] < 'A' || fd.Name[0] > 'Z' {
 				continue
 			}
 
-			var opt = &DataSpec_Field{
-				Name: fd.Name,
+			var field = &SpecField{
+				Name:    fd.Name,
+				TagName: fd.Name,
 			}
 
 			if s := fd.Tag.Get("json"); s != "" {
 				sa := strings.Split(s, ",")
 				if sa[0] != "" && sa[0] != "omitempty" {
-					opt.Name = sa[0]
-				}
-				if sa[len(sa)-1] != "omitempty" {
-					opt.Required = true
+					field.TagName = sa[0]
 				}
 			}
+
+			if slices.Contains(names, field.Name) {
+				continue
+			}
+			names = append(names, field.Name)
 
 			switch fd.Type.Kind() {
 
 			case reflect.String:
-				opt.Type = DataSpec_String
+				field.Type = SpecField_String
+				if es := fd.Tag.Get("x_enums"); es != "" {
+					ar := strings.Split(es, ",")
+					m := map[string]bool{}
+					for _, v := range ar {
+						if _, ok := m[v]; !ok {
+							field.Enums = append(field.Enums, v)
+							m[v] = true
+						}
+					}
+				}
 
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				opt.Type = DataSpec_Int
+				field.Type = SpecField_Int
 
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				opt.Type = DataSpec_Uint
+				field.Type = SpecField_Uint
 
 			case reflect.Float32, reflect.Float64:
-				opt.Type = DataSpec_Float
+				field.Type = SpecField_Float
 
 			case reflect.Bool:
-				opt.Type = DataSpec_Bool
+				field.Type = SpecField_Bool
 
 			case reflect.Struct:
-				opt.Type = DataSpec_Struct
-				parseStruct(nil, opt, fd.Type)
+				field.Type = SpecField_Struct
+				field.Kind = refTypeKind(fd.Type)
+				parseStruct(depth+1, field, fd.Type)
 
 			case reflect.Pointer:
-				opt.Type = DataSpec_Struct
-				parseStruct(nil, opt, fd.Type.Elem())
+				switch fd.Type.Elem().Kind() {
+
+				case reflect.Struct:
+					field.Type = SpecField_Struct
+					field.Kind = refTypeKind(fd.Type.Elem())
+					parseStruct(depth+1, field, fd.Type.Elem())
+				}
 
 			case reflect.Slice:
 				if fd.Type.Elem().Kind() == reflect.Uint8 {
-					opt.Type = DataSpec_Bytes
+					field.Type = SpecField_Bytes
 				} else {
-					parseArray(opt, fd.Type.Elem())
+					parseArray(depth+1, field, fd.Type.Elem())
+				}
+
+			case reflect.Map:
+
+				var (
+					mapKeyType   string
+					mapValueType = fd.Type.Elem()
+				)
+
+				switch fd.Type.Key().Kind() {
+				case reflect.String:
+					mapKeyType = SpecField_String
+
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					mapKeyType = SpecField_Int
+
+				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+					mapKeyType = SpecField_Uint
+				}
+
+				if mapKeyType != "" {
+
+					switch mapValueType.Kind() {
+					case reflect.String:
+						field.Type = specMapType(mapKeyType, SpecField_String)
+
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						field.Type = specMapType(mapKeyType, SpecField_Int)
+
+					case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+						field.Type = specMapType(mapKeyType, SpecField_Uint)
+
+					case reflect.Float32, reflect.Float64:
+						field.Type = specMapType(mapKeyType, SpecField_Float)
+
+					case reflect.Bool:
+						field.Type = specMapType(mapKeyType, SpecField_Bool)
+
+					case reflect.Pointer:
+						mapValueType = mapValueType.Elem()
+						switch mapValueType.Kind() {
+						case reflect.Struct:
+							field.Type = specMapType(mapKeyType, SpecField_Struct)
+							field.Kind = refTypeKind(mapValueType)
+							parseStruct(depth+1, field, mapValueType)
+						}
+					}
 				}
 			}
 
-			if opt.Type != "" {
-				opt.DefaultValue = parseDefaultValue(fd.Tag.Get("default_value"), opt.Type)
-				if spec != nil {
-					spec.Fields = append(spec.Fields, opt)
-				} else if upOpt != nil {
-					upOpt.Fields = append(upOpt.Fields, opt)
+			if field.Type == "" {
+				continue
+			}
+
+			parseValueLimits(field, fd)
+
+			if fd.Tag.Get("x_attrs") != "" {
+				attrs := strings.Split(fd.Tag.Get("x_attrs"), ",")
+				for _, attr := range attrs {
+					if _, ok := specFieldAttrs[attr]; ok {
+						field.Attrs = append(field.Attrs, attr)
+					}
 				}
 			}
+			pField.Fields = append(pField.Fields, field)
 		}
 	}
 
-	parseArray = func(opt *DataSpec_Field, rt reflect.Type) {
+	parseArray = func(depth int, cField *SpecField, rt reflect.Type) {
+		if depth > maxDepth {
+			return
+		}
 
 		switch rt.Kind() {
 
 		case reflect.String:
-			opt.Type = DataSpec_ArrayString
+			cField.Type = specArrayType(SpecField_String)
 
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			opt.Type = DataSpec_ArrayInt
+			cField.Type = specArrayType(SpecField_Int)
 
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			opt.Type = DataSpec_ArrayUint
+			cField.Type = specArrayType(SpecField_Uint)
 
 		case reflect.Float32, reflect.Float64:
-			opt.Type = DataSpec_ArrayFloat
+			cField.Type = specArrayType(SpecField_Float)
 
 		case reflect.Bool:
-			opt.Type = DataSpec_ArrayBool
+			cField.Type = specArrayType(SpecField_Bool)
 
 		case reflect.Struct:
-			opt.Type = DataSpec_ArrayStruct
-			parseStruct(nil, opt, rt)
+			cField.Type = specArrayType(SpecField_Struct)
+			cField.Kind = refTypeKind(rt)
+			parseStruct(depth+1, cField, rt)
 
 		case reflect.Pointer:
 			if rt.Elem().Kind() == reflect.Struct {
-				opt.Type = DataSpec_ArrayStruct
-				parseStruct(nil, opt, rt.Elem())
+				cField.Type = specArrayType(SpecField_Struct)
+				cField.Kind = refTypeKind(rt.Elem())
+				parseStruct(depth+1, cField, rt.Elem())
 			}
 		}
 	}
 
-	parseStruct(spec, nil, rt)
+	parseStruct(0, baseSpec, rt)
 
-	return spec, nil
+	return &Spec{
+		Name:   baseSpec.Name,
+		Kind:   baseSpec.Kind,
+		Fields: baseSpec.Fields,
+	}, rt, nil
+}
+
+// func (it *SpecField) ReflectKindEqual(kind reflect.Kind) bool {
+// 	switch kind {
+// 	case reflect.Bool:
+// 		return it.Type == SpecField_Bool
+//
+// 	case reflect.String:
+// 		return it.Type == SpecField_String
+// 	}
+// 	return false
+// }
+
+func ParseStructValid(kind string, data *structpb.Struct) (interface{}, error) {
+	spec := specSet.Get(kind)
+	if spec == nil {
+		return nil, fmt.Errorf("spec kind (%s) not found", kind)
+	}
+	js, _ := json.Marshal(data)
+	fmt.Println(string(js))
+	fmt.Println(spec.Type)
+
+	obj := reflect.New(spec.Type).Interface()
+	fmt.Println(obj)
+	if err := json.Unmarshal(js, obj); err != nil {
+		return nil, err
+	}
+	return obj, nil
 }

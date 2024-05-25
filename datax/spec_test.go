@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datax
+package datax_test
 
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/lynkdb/lynkx/datax"
 )
 
 func Test_ParseSpec(t *testing.T) {
@@ -28,7 +30,7 @@ func Test_ParseSpec(t *testing.T) {
 
 	type Obj struct {
 		Name   string   `json:"name" toml:"name"`
-		Source string   `json:"source" toml:"source" default_value:"abc"`
+		Source string   `json:"source" toml:"source" default_value:"abc" attrs:"primary_key"`
 		Sub1   *Sub     `json:"sub1" toml:"sub1"`
 		Sub2   Sub      `json:"sub2" toml:"sub2"`
 		Array  []string `json:"array" toml:"array"`
@@ -49,14 +51,14 @@ func Test_ParseSpec(t *testing.T) {
 		Bytes: []byte("hello"),
 	}
 
-	spec, err := ParseSpec(Obj{})
+	spec, _, err := datax.NewSpecFromStruct(Obj{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	js, _ := json.MarshalIndent(spec, "", "  ")
 	t.Logf("spec %v", string(js))
 
-	m := TryParseMap(o)
+	m := datax.ParseStruct(o)
 	js, _ = json.MarshalIndent(m, "", "  ")
 	t.Logf("map %v", string(js))
 }
