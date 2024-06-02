@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cli
+package lynkcli
 
 import (
 	"fmt"
@@ -23,13 +23,21 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/hooto/htoml4g/htoml"
+
+	"github.com/lynkdb/lynkapi/go/lynkapi"
 )
 
+type ConfigCommon struct {
+	Services   []*lynkapi.ClientConfig `toml:"services" json:"services"`
+	LastActive string                  `toml:"last_active" json:"last_active"`
+}
+
 var (
-	client *dataxClient
-	cfile  string
-	cfg    ConfigCommon
-	err    error
+	client    lynkapi.Client
+	cfile     string
+	cfg       ConfigCommon
+	cfgActive lynkapi.ClientConfig
+	err       error
 )
 
 func filterInput(r rune) (rune, bool) {
@@ -45,7 +53,9 @@ func resetPrompt(l *readline.Instance) {
 	l.SetPrompt("cli : ")
 }
 
-func Run() error {
+type SetupFunc func(cfg lynkapi.ClientConfig) error
+
+func Run(args ...interface{}) error {
 
 	if err := cfgSetup(); err != nil {
 		return err
@@ -55,9 +65,19 @@ func Run() error {
 		return err
 	}
 
+	for _, arg := range args {
+		switch arg.(type) {
+		case SetupFunc:
+			fn := arg.(SetupFunc)
+			if err := fn(cfgActive); err != nil {
+				return err
+			}
+		}
+	}
+
 	l, err := readline.NewEx(&readline.Config{
 		AutoComplete:        nil, // completer,
-		HistoryFile:         fmt.Sprintf("~/.%s_history", "datax"),
+		HistoryFile:         fmt.Sprintf("~/.%s_history", "lynkapi"),
 		InterruptPrompt:     "^C",
 		EOFPrompt:           "exit",
 		HistorySearchFold:   true,
@@ -121,7 +141,7 @@ func cfgSetup() error {
 		return fmt.Errorf("no service endpoint config in %s", cfile)
 	}
 
-	var active *ConfigService
+	var active *lynkapi.ClientConfig
 	for _, service := range cfg.Services {
 		if cfg.LastActive != "" && cfg.LastActive == service.Name {
 			active = service
@@ -145,6 +165,7 @@ func cfgSetup() error {
 		htoml.EncodeToFile(&cfg, cfile)
 	}
 
+	cfgActive = *active
 	fmt.Printf("connect to %s\n", active.Addr)
 
 	return nil

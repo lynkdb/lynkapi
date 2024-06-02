@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package lynkdb.lynkapi;
+
+option optimize_for = LITE_RUNTIME;
+option go_package = ".;lynkapi";
+
+import "google/protobuf/struct.proto";
+
+import "lynkdb/lynkapi/type.proto";
+
+// database
+
+message TableSpec {
+  message Row {
+    string id = 1;
+    repeated google.protobuf.Value values = 9;
+    map<string, google.protobuf.Value> fields = 10;
+  }
+
+  string name = 1;  // `x_attrs:"name_identifier"`
+  repeated SpecField fields = 9;
+  repeated string primary_fields = 10;
+  repeated string index_fields = 11;
+
+  string engine = 13;
+  string prefix = 14;
+
+  map<string, string> options = 15;
+  repeated Row demo_rows = 16;
+}
+
+message DataSpec {
+  string driver = 1;  // `x_attrs:"name_identifier"`
+  repeated TableSpec tables = 9;
+}
+
+message DataConnect {
+  string address = 1;
+  string user = 2;
+  string password = 3;
+  string access_key = 4;
+}
+
+message DataInstance {
+  string kind = 1;
+  string name = 2;  // `x_attrs:"name_identifier"`
+  string type = 3;  // `x_enums:"table,kv"`
+  DataConnect connect = 8;
+  DataSpec spec = 9;
+}
+
+message DataProject {
+  string name = 2;  // `x_attrs:"name_identifier"`
+
+  repeated DataInstance instances = 9;
+}
+
+// ref
+// https://github.com/go-rel/rel/blob/master/query.go
+
+message DataQuery {
+  message Filter {
+    string type = 1;  // `x_enums:",and,or"`
+    string name = 2;
+    string value = 3;
+    repeated Filter inner = 4;
+  }
+  message SortFilter {
+    string type = 1;  // `x_enums:",asc,desc"`
+    string field = 2;
+    string value = 3;
+  }
+  string instance_name = 2;  // `x_attrs:"name_identifier"`
+  string table_name = 3;     // `x_attrs:"name_identifier"`
+  repeated string fields = 5;
+  Filter filter = 6;
+  repeated SortFilter sort = 7;
+  string offset = 8;
+  int64 limit = 9;
+}
+
+// message DataUpsertRequest {
+//   string instance_name = 2;  // `x_attrs:"name_identifier"`
+//   string table_name = 3;     // `x_attrs:"name_identifier"`
+//   repeated string fields = 5;
+//   repeated string values = 6;
+//   DataQuery.Filter filter = 7;
+// }
+
+message DataResult {
+  string kind = 1;
+  string name = 2;
+
+  TableSpec spec = 3;
+  repeated TableSpec.Row rows = 9;  // `x_attrs:"rows"`
+}
+
+message DataResults {
+  string kind = 1;
+
+  repeated DataResult results = 9;
+}

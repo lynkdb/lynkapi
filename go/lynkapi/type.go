@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datax
+package lynkapi
 
 import (
 	"encoding/json"
@@ -34,6 +34,9 @@ const (
 	SpecField_String = "string"
 	SpecField_Struct = "struct"
 	SpecField_Bytes  = "bytes"
+
+	// todo
+	SpecField_StringTerm = "string_term"
 )
 
 var specFieldAttrs = map[string]bool{
@@ -87,7 +90,20 @@ func (it *Spec) Rows(data *structpb.Struct) (*SpecField, *structpb.ListValue) {
 }
 
 func (it *Spec) DataMerge(dstObject, srcObject interface{}, opts ...interface{}) (bool, error) {
-	return specDataMerge(it, dstObject, srcObject)
+	return specDataMerge(it, dstObject, srcObject, opts...)
+}
+
+func (it *SpecField) Field(name string) *SpecField {
+	for _, field := range it.Fields {
+		if field.TagName == name || field.Name == name {
+			return field
+		}
+	}
+	return nil
+}
+
+func (it *SpecField) HasAttr(attr string) bool {
+	return slices.Contains(it.Attrs, attr)
 }
 
 func (it *SpecSet) Register(o interface{}) error {

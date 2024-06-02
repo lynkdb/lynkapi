@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cli
+package lynkcli
 
 import (
 	"fmt"
@@ -20,18 +20,18 @@ import (
 	"strings"
 )
 
-type flagSet struct {
+type FlagSet struct {
 	path    string
 	rawArgs []string
-	varArgs []string
-	args    map[string]flagValue
+	VarArgs []string
+	args    map[string]FlagValue
 }
 
 func flagVarParse(s string) []string {
 	s = strings.TrimSpace(s)
 
 	var (
-		varArgs []string
+		VarArgs []string
 		rawArgs = strings.Split(s, " ")
 	)
 
@@ -42,21 +42,21 @@ func flagVarParse(s string) []string {
 		if v[0] == '-' {
 			break
 		}
-		varArgs = append(varArgs, v)
+		VarArgs = append(VarArgs, v)
 	}
 
-	return varArgs
+	return VarArgs
 }
 
-func flagParse(s string) flagSet {
+func flagParse(s string) FlagSet {
 
 	s = strings.TrimSpace(s)
 
-	fset := flagSet{
+	fset := FlagSet{
 		path:    "",
 		rawArgs: strings.Split(s, " "),
-		varArgs: []string{},
-		args:    map[string]flagValue{},
+		VarArgs: []string{},
+		args:    map[string]FlagValue{},
 	}
 
 	if n := strings.Index(s, " -"); n >= 0 {
@@ -75,27 +75,27 @@ func flagParse(s string) flagSet {
 
 		if n := strings.Index(k, "="); n > 0 {
 			if n+1 < len(k) {
-				fset.args[k[:n]] = flagValue(k[n+1:])
+				fset.args[k[:n]] = FlagValue(k[n+1:])
 			} else {
-				fset.args[k[:n]] = flagValue("")
+				fset.args[k[:n]] = FlagValue("")
 			}
 			continue
 		}
 
 		if len(fset.rawArgs) <= (i+1) || fset.rawArgs[i+1][0] == '-' {
-			fset.args[k] = flagValue([]byte(""))
+			fset.args[k] = FlagValue([]byte(""))
 			continue
 		}
 
 		v := fset.rawArgs[i+1]
 
-		fset.args[k] = flagValue([]byte(v))
+		fset.args[k] = FlagValue([]byte(v))
 	}
 
 	return fset
 }
 
-func (it *flagSet) ValueOK(key string) (flagValue, bool) {
+func (it *FlagSet) ValueOK(key string) (FlagValue, bool) {
 
 	if v, ok := it.args[key]; ok {
 		return v, ok
@@ -104,38 +104,42 @@ func (it *flagSet) ValueOK(key string) (flagValue, bool) {
 	return nil, false
 }
 
-func (it *flagSet) Value(key string) flagValue {
+func (it *FlagSet) Value(key string) FlagValue {
 
 	if v, ok := it.ValueOK(key); ok {
 		return v
 	}
 
-	return flagValue{}
+	return FlagValue{}
 }
 
-func (it *flagSet) Has(key string) bool {
+func (it *FlagSet) setValue(key, val string) {
+	it.args[key] = FlagValue([]byte(val))
+}
+
+func (it *FlagSet) Has(key string) bool {
 	if _, ok := it.args[key]; ok {
 		return true
 	}
 	return false
 }
 
-func (it *flagSet) Each(fn func(key, val string)) {
+func (it *FlagSet) Each(fn func(key, val string)) {
 	for k, v := range it.args {
 		fn(k, v.String())
 	}
 }
 
 // Universal Bytes
-type flagValue []byte
+type FlagValue []byte
 
 // String converts the value-bytes to string
-func (bx flagValue) String() string {
+func (bx FlagValue) String() string {
 	return string(bx)
 }
 
 // Bool converts the value-bytes to bool
-func (bx flagValue) Bool() bool {
+func (bx FlagValue) Bool() bool {
 	if len(bx) > 0 {
 		if b, err := strconv.ParseBool(string(bx)); err == nil {
 			return b
@@ -145,7 +149,7 @@ func (bx flagValue) Bool() bool {
 }
 
 // Int64 converts the value-bytes to int64
-func (bx flagValue) Int64() int64 {
+func (bx FlagValue) Int64() int64 {
 	if len(bx) > 0 {
 		if i64, err := strconv.ParseInt(string(bx), 10, 64); err == nil {
 			return i64
@@ -155,7 +159,7 @@ func (bx flagValue) Int64() int64 {
 }
 
 // Float64 converts the value-bytes to float64
-func (bx flagValue) Float64() float64 {
+func (bx FlagValue) Float64() float64 {
 	if len(bx) > 0 {
 		if f64, err := strconv.ParseFloat(string(bx), 64); err == nil {
 			return f64

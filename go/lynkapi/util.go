@@ -12,23 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datax
+package lynkapi
 
-// Service Status Codes
-const (
-	StatusCode_OK = "2000"
-
-	// Client error responses
-	StatusCode_BadRequest = "4000"
-	StatusCode_UnAuth     = "4010"
-	StatusCode_NotFound   = "4040"
-	StatusCode_Conflict   = "4090"
-	StatusCode_RateLimit  = "4290"
-
-	// Server error responses
-	StatusCode_InternalServerError = "5000"
-	StatusCode_NotImplemented      = "5010"
-	StatusCode_ServiceUnavailable  = "5030"
+import (
+	"encoding/json"
+	"fmt"
 )
 
-const RequestSpecNameInContext = "lynkx/datax.Context.RequestSpec"
+func jsonPrint(o interface{}) {
+	js, _ := json.MarshalIndent(o, "", "  ")
+	fmt.Println(string(js))
+}

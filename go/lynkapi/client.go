@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cli
+package lynkapi
 
 import (
 	"context"
@@ -24,8 +24,7 @@ import (
 	"github.com/hooto/hauth/go/hauth/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-
-	"github.com/lynkdb/lynkx/datax"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -38,29 +37,29 @@ var (
 
 	dbMut sync.Mutex
 
-	dataxConns = map[string]*dataxClient{}
+	clientConns = map[string]*clientImpl{}
 )
 
-type ConfigService struct {
+type Client interface {
+	ApiList(req *ApiListRequest) *ApiListResponse
+	Exec(req *Request) *Response
+}
+
+type ClientConfig struct {
 	Name      string           `toml:"name" json:"name"`
 	Addr      string           `toml:"addr" json:"addr"`
 	AccessKey *hauth.AccessKey `toml:"access_key" json:"access_key"`
 }
 
-type ConfigCommon struct {
-	Services   []*ConfigService `toml:"services" json:"services"`
-	LastActive string           `toml:"last_active" json:"last_active"`
-}
-
-type dataxClient struct {
+type clientImpl struct {
 	_ak     string
-	cfg     *ConfigService
+	cfg     *ClientConfig
 	rpcConn *grpc.ClientConn
-	ac      datax.DataxServiceClient
+	ac      DataxServiceClient
 	err     error
 }
 
-func (it *ConfigService) NewClient() (*dataxClient, error) {
+func (it *ClientConfig) NewClient() (*clientImpl, error) {
 
 	if it.AccessKey == nil {
 		return nil, errors.New("access key not setup")
@@ -71,11 +70,11 @@ func (it *ConfigService) NewClient() (*dataxClient, error) {
 	dbMut.Lock()
 	defer dbMut.Unlock()
 
-	if dataxConns == nil {
-		dataxConns = map[string]*dataxClient{}
+	if clientConns == nil {
+		clientConns = map[string]*clientImpl{}
 	}
 
-	dataxConn, ok := dataxConns[ak]
+	clientConn, ok := clientConns[ak]
 	if !ok {
 
 		conn, err := rpcClientConnect(it.Addr, it.AccessKey, false)
@@ -83,46 +82,62 @@ func (it *ConfigService) NewClient() (*dataxClient, error) {
 			return nil, err
 		}
 
-		dataxConn = &dataxClient{
+		clientConn = &clientImpl{
 			_ak:     ak,
 			cfg:     it,
 			rpcConn: conn,
-			ac:      datax.NewDataxServiceClient(conn),
+			ac:      NewDataxServiceClient(conn),
 		}
-		dataxConns[ak] = dataxConn
+		clientConns[ak] = clientConn
 	}
 
-	return dataxConn, nil
+	return clientConn, nil
 }
 
-func (it *ConfigService) timeout() time.Duration {
+func (it *ClientConfig) timeout() time.Duration {
 	return time.Second * 60
 }
 
-func (it *dataxClient) ApiList(req *datax.ApiListRequest) *datax.ApiListResponse {
+func (it *clientImpl) ApiList(req *ApiListRequest) *ApiListResponse {
 
 	ctx, fc := context.WithTimeout(context.Background(), it.cfg.timeout())
 	defer fc()
 
 	rs, err := it.ac.ApiList(ctx, req)
 	if err != nil {
-		return &datax.ApiListResponse{
-			Status: datax.ParseError(err),
+		if status, ok := status.FromError(err); ok && len(status.Message()) > 5 {
+			return &ApiListResponse{
+				Status: ParseError(errors.New(status.Message())),
+			}
 		}
+		return &ApiListResponse{
+			Status: ParseError(err),
+		}
+	}
+	if rs.Status == nil {
+		rs.Status = NewServiceStatusOK()
 	}
 	return rs
 }
 
-func (it *dataxClient) Exec(req *datax.Request) *datax.Response {
+func (it *clientImpl) Exec(req *Request) *Response {
 
 	ctx, fc := context.WithTimeout(context.Background(), it.cfg.timeout())
 	defer fc()
 
 	rs, err := it.ac.Exec(ctx, req)
 	if err != nil {
-		return &datax.Response{
-			Status: datax.ParseError(err),
+		if status, ok := status.FromError(err); ok && len(status.Message()) > 5 {
+			return &Response{
+				Status: ParseError(errors.New(status.Message())),
+			}
 		}
+		return &Response{
+			Status: ParseError(err),
+		}
+	}
+	if rs.Status == nil {
+		rs.Status = NewServiceStatusOK()
 	}
 	return rs
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cli
+package lynkcli
 
 import (
 	"bytes"
@@ -23,30 +23,34 @@ import (
 	"strings"
 
 	"github.com/chzyer/readline"
-	"github.com/lynkdb/lynkx/datax"
 	"github.com/olekukonko/tablewriter"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	"github.com/lynkdb/lynkapi/go/lynkapi"
 )
 
 // Management Commands
 type mgrService struct {
 	lowerName  string
 	name       string
-	methods    []*datax.ServiceMethod
-	idxMethods map[string]*datax.ServiceMethod
+	methods    []*lynkapi.ServiceMethod
+	idxMethods map[string]*lynkapi.ServiceMethod
 }
 
 var (
 	arrMgrServices []*mgrService
 	idxMgrServices = map[string]*mgrService{}
+	idxMgrRenders  = map[string]methodRender{}
 )
+
+type methodRender func(data *structpb.Struct) (string, error)
 
 func mgrSetup() error {
 	if len(arrMgrServices) > 0 {
 		return nil
 	}
 
-	rs := client.ApiList(&datax.ApiListRequest{})
+	rs := client.ApiList(&lynkapi.ApiListRequest{})
 	if err := rs.Status.Err(); err != nil {
 		return err
 	}
@@ -63,7 +67,7 @@ func mgrSetup() error {
 			name:       srv.Name,
 			lowerName:  lowerName(srv.Name),
 			methods:    srv.Methods,
-			idxMethods: map[string]*datax.ServiceMethod{},
+			idxMethods: map[string]*lynkapi.ServiceMethod{},
 		}
 
 		if strings.HasSuffix(ms.lowerName, "-service") {
@@ -78,14 +82,18 @@ func mgrSetup() error {
 			idxMgrServices[ms.lowerName] = ms
 			arrMgrServices = append(arrMgrServices, ms)
 
-			register(ms)
+			RegisterCommonCommand(ms)
 		}
 	}
 
 	return nil
 }
 
-func (it *mgrService) help(fg flagSet) string {
+func RegisterRender(serviceName, methodName string, fn func(data *structpb.Struct) (string, error)) {
+	idxMgrRenders[fmt.Sprintf("%s.%s", serviceName, methodName)] = methodRender(fn)
+}
+
+func (it *mgrService) help(fg FlagSet) string {
 
 	var (
 		tbuf  bytes.Buffer
@@ -140,33 +148,48 @@ func (it *mgrService) help(fg flagSet) string {
 	return fmt.Sprintf("\n%s Commands:\n\n%s\n", it.name, tbuf.String())
 }
 
-func (it *mgrService) Spec() baseCommandSpec {
-	return baseCommandSpec{
+func (it *mgrService) Spec() BaseCommandSpec {
+	return BaseCommandSpec{
 		Mgr:  true,
 		Path: it.lowerName,
 	}
 }
 
-func (it *mgrService) Action(fg flagSet, l *readline.Instance) (string, error) {
+type cliContext struct {
+	dataCreate bool
+	dataUpdate bool
+}
 
-	if len(fg.varArgs) == 0 {
+func (it *mgrService) Action(fg FlagSet, l *readline.Instance) (string, error) {
+
+	if len(fg.VarArgs) == 0 {
 		return it.help(fg), nil
 	}
 
-	m := it.idxMethods[fg.varArgs[0]]
+	m := it.idxMethods[fg.VarArgs[0]]
 	if m == nil {
 		return it.help(fg), nil
+	}
+
+	ctx := &cliContext{}
+
+	if strings.HasSuffix(fg.VarArgs[0], "-create") {
+		ctx.dataCreate = true
+	}
+
+	if strings.HasSuffix(fg.VarArgs[0], "-update") {
+		ctx.dataUpdate = true
 	}
 
 	reqData := &structpb.Struct{
 		Fields: map[string]*structpb.Value{},
 	}
-	if err := scanInput(1, reqData, &datax.SpecField{
+	if err := scanInput(ctx, 1, reqData, &lynkapi.SpecField{
 		Fields: m.RequestSpec.Fields,
 	}, l); err != nil {
 		return "", err
 	}
-	req := &datax.Request{
+	req := &lynkapi.Request{
 		ServiceName: it.name,
 		MethodName:  m.Name,
 		Data:        reqData,
@@ -174,6 +197,10 @@ func (it *mgrService) Action(fg flagSet, l *readline.Instance) (string, error) {
 	rs := client.Exec(req)
 	if err := rs.Status.Err(); err != nil {
 		return "", err
+	}
+
+	if render, ok := idxMgrRenders[it.lowerName+"."+fg.VarArgs[0]]; ok {
+		return render(rs.Data)
 	}
 
 	str, err := iterOutput(rs.Data, m.ResponseSpec)
@@ -188,7 +215,7 @@ func (it *mgrService) Action(fg flagSet, l *readline.Instance) (string, error) {
 	return str, nil
 }
 
-func iterOutput(data *structpb.Struct, spec *datax.Spec) (string, error) {
+func iterOutput(data *structpb.Struct, spec *lynkapi.Spec) (string, error) {
 
 	if data == nil {
 		return "", nil
@@ -206,7 +233,7 @@ func iterOutput(data *structpb.Struct, spec *datax.Spec) (string, error) {
 
 		for _, f := range specField.Fields {
 			mapFields[f.TagName] = len(mapFields)
-			fieldNames = append(fieldNames, f.Name)
+			fieldNames = append(fieldNames, f.TagName)
 		}
 
 		if len(fieldNames) != len(mapFields) {
@@ -239,7 +266,20 @@ func iterOutput(data *structpb.Struct, spec *datax.Spec) (string, error) {
 					fieldValues[idx] = value.GetStringValue()
 
 				case *structpb.Value_NumberValue:
-					fieldValues[idx] = fmt.Sprintf("%f", value.GetNumberValue())
+					if value.GetNumberValue() != 0 {
+						if fd := specField.Field(name); fd != nil {
+							switch fd.Type {
+							case lynkapi.SpecField_Int:
+								fieldValues[idx] = fmt.Sprintf("%d", int64(value.GetNumberValue()))
+
+							case lynkapi.SpecField_Uint:
+								fieldValues[idx] = fmt.Sprintf("%d", uint64(value.GetNumberValue()))
+
+							case lynkapi.SpecField_Float:
+								fieldValues[idx] = fmt.Sprintf("%f", value.GetNumberValue())
+							}
+						}
+					}
 
 				case *structpb.Value_BoolValue:
 					fieldValues[idx] = fmt.Sprintf("%b", value.GetBoolValue())
@@ -286,12 +326,12 @@ func iterOutput(data *structpb.Struct, spec *datax.Spec) (string, error) {
 				if value.GetNumberValue() != 0 {
 					if specField := spec.Field(name); specField != nil {
 						switch specField.Type {
-						case datax.SpecField_Int:
+						case lynkapi.SpecField_Int:
 							table.Append([]string{name, fmt.Sprintf("%d", int64(value.GetNumberValue()))})
 
-						case datax.SpecField_Uint:
+						case lynkapi.SpecField_Uint:
 							table.Append([]string{name, fmt.Sprintf("%d", uint64(value.GetNumberValue()))})
-						case datax.SpecField_Float:
+						case lynkapi.SpecField_Float:
 							table.Append([]string{name, fmt.Sprintf("%f", value.GetNumberValue())})
 						}
 					}
@@ -314,15 +354,26 @@ func iterOutput(data *structpb.Struct, spec *datax.Spec) (string, error) {
 	return "", fmt.Errorf("no response")
 }
 
-func scanInput(depth int, data *structpb.Struct, specField *datax.SpecField, l *readline.Instance) error {
+func scanInput(ctx *cliContext, depth int, data *structpb.Struct, specField *lynkapi.SpecField, l *readline.Instance) error {
 
 	for _, field := range specField.Fields {
 
 		prompt := fmt.Sprintf("%s%s", strings.Repeat(" ", depth*2), field.Name)
 
-		if field.Type == datax.SpecField_Struct {
+		if field.Type == lynkapi.SpecField_Struct {
 
-			prompt += fmt.Sprintf(" (type `yes` to edit this sub-object, `no` to skip) [no]")
+			prompt += fmt.Sprintf(" (type `yes` to edit this sub-object, `no` to skip)")
+
+			yes := false
+
+			if (ctx.dataCreate && slices.Contains(field.Attrs, "create_required")) ||
+				(ctx.dataUpdate && slices.Contains(field.Attrs, "update_required")) {
+				prompt += fmt.Sprintf(" (required) [yes]")
+				yes = true
+			} else {
+				prompt += fmt.Sprintf(" (optional) [no]")
+			}
+
 			l.SetPrompt(prompt + " : ")
 
 			v, err := l.Readline()
@@ -330,12 +381,12 @@ func scanInput(depth int, data *structpb.Struct, specField *datax.SpecField, l *
 				return err
 			}
 			v = strings.ToLower(strings.TrimSpace(v))
-			if v == "yes" {
+			if v == "yes" || yes {
 				structValue := &structpb.Struct{
 					Fields: map[string]*structpb.Value{},
 				}
 				data.Fields[field.TagName] = structpb.NewStructValue(structValue)
-				if err := scanInput(depth+1, structValue, field, l); err != nil {
+				if err := scanInput(ctx, depth+1, structValue, field, l); err != nil {
 					return err
 				}
 			}
@@ -346,8 +397,9 @@ func scanInput(depth int, data *structpb.Struct, specField *datax.SpecField, l *
 			prompt += fmt.Sprintf(" [enums: %s]", strings.Join(field.Enums, ","))
 		}
 
-		if slices.Contains(field.Attrs, "required") ||
-			slices.Contains(field.Attrs, "primary_key") {
+		if slices.Contains(field.Attrs, "primary_key") ||
+			(ctx.dataCreate && slices.Contains(field.Attrs, "create_required")) ||
+			(ctx.dataUpdate && slices.Contains(field.Attrs, "update_required")) {
 			prompt += fmt.Sprintf(" (required)")
 		} else {
 			prompt += fmt.Sprintf(" (optional)")
@@ -366,43 +418,43 @@ func scanInput(depth int, data *structpb.Struct, specField *datax.SpecField, l *
 		}
 
 		switch field.Type {
-		case datax.SpecField_String:
+		case lynkapi.SpecField_String:
 			data.Fields[field.TagName] = structpb.NewStringValue(v)
 
-		case datax.SpecField_Int:
+		case lynkapi.SpecField_Int:
 			if num, err := strconv.ParseInt(v, 10, 64); err != nil {
 				return err
 			} else {
 				data.Fields[field.TagName] = structpb.NewNumberValue(float64(num))
 			}
 
-		case datax.SpecField_Uint:
+		case lynkapi.SpecField_Uint:
 			if num, err := strconv.ParseUint(v, 10, 64); err != nil {
 				return err
 			} else {
 				data.Fields[field.TagName] = structpb.NewNumberValue(float64(num))
 			}
 
-		case datax.SpecField_Float:
+		case lynkapi.SpecField_Float:
 			if num, err := strconv.ParseFloat(v, 64); err != nil {
 				return err
 			} else {
 				data.Fields[field.TagName] = structpb.NewNumberValue(float64(num))
 			}
 
-		case datax.SpecField_Bool:
+		case lynkapi.SpecField_Bool:
 			if b, err := strconv.ParseBool(v); err != nil {
 				return err
 			} else {
 				data.Fields[field.TagName] = structpb.NewBoolValue(b)
 			}
 
-		case datax.SpecField_Struct:
+		case lynkapi.SpecField_Struct:
 			structValue := &structpb.Struct{
 				Fields: map[string]*structpb.Value{},
 			}
 			data.Fields[field.TagName] = structpb.NewStructValue(structValue)
-			if err := scanInput(depth+1, structValue, field, l); err != nil {
+			if err := scanInput(ctx, depth+1, structValue, field, l); err != nil {
 				return err
 			}
 

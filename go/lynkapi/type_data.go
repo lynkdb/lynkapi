@@ -1,6 +1,7 @@
-package datax
+package lynkapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -10,13 +11,24 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func specDataMerge(spec *Spec, dstObject, srcObject interface{}) (bool, error) {
+func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interface{}) (bool, error) {
 
 	var (
 		chg        = false
 		dataMerge  func(spec *SpecField, dstValue, srcValue reflect.Value) error
 		arrayMerge func(spec *SpecField, dstValue, srcValue reflect.Value) error
+		mergeType  DataMerge_Type
 	)
+
+	for _, opt := range opts {
+		if opt == nil {
+			continue
+		}
+		switch opt.(type) {
+		case DataMerge_Type:
+			mergeType = opt.(DataMerge_Type)
+		}
+	}
 
 	arrayMerge = func(specField *SpecField, dstValue, srcValue reflect.Value) error {
 
@@ -158,6 +170,27 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}) (bool, error) {
 		return ""
 	}
 
+	requiredCheck := func(specField *SpecField) error {
+
+		if mergeType != DataMerge_Create &&
+			mergeType != DataMerge_Update {
+			return nil
+		}
+
+		switch mergeType {
+		case DataMerge_Create:
+			if specField.HasAttr("create_required") {
+				return fmt.Errorf("field %s update_required", specField.Name)
+			}
+
+		case DataMerge_Update:
+			if specField.HasAttr("update_required") {
+				return fmt.Errorf("field %s update_required", specField.Name)
+			}
+		}
+		return nil
+	}
+
 	dataMerge = func(spec *SpecField, dstValue, srcValue reflect.Value) error {
 
 		if spec == nil || len(spec.Fields) == 0 ||
@@ -185,7 +218,11 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}) (bool, error) {
 			var (
 				value = srcValue.FieldByName(specField.Name)
 			)
+
 			if !value.IsValid() {
+				if err := requiredCheck(specField); err != nil {
+					return err
+				}
 				continue
 			}
 
@@ -193,6 +230,7 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}) (bool, error) {
 			if !dstField.CanSet() {
 				continue
 			}
+
 			// fmt.Println("field", specField.Name, "dstField", dstField, value)
 
 			switch value.Kind() {
@@ -227,6 +265,10 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}) (bool, error) {
 				} else if dstField.String() == "" && defValue != "" {
 					chg = true
 					dstField.SetString(defValue)
+				} else {
+					if err := requiredCheck(specField); err != nil {
+						return err
+					}
 				}
 
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -245,6 +287,10 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}) (bool, error) {
 				} else if dstField.Int() == 0 && defValue != 0 && defValue >= minValue && defValue <= maxValue {
 					chg = true
 					dstField.SetInt(defValue)
+				} else {
+					if err := requiredCheck(specField); err != nil {
+						return err
+					}
 				}
 
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
@@ -263,6 +309,10 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}) (bool, error) {
 				} else if dstField.Uint() == 0 && defValue != 0 && defValue >= minValue && defValue <= maxValue {
 					chg = true
 					dstField.SetUint(defValue)
+				} else {
+					if err := requiredCheck(specField); err != nil {
+						return err
+					}
 				}
 
 			case reflect.Float32, reflect.Float64:
@@ -281,6 +331,10 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}) (bool, error) {
 				} else if dstField.Float() == 0 && defValue != 0 && defValue >= minValue && defValue <= maxValue {
 					chg = true
 					dstField.SetFloat(defValue)
+				} else {
+					if err := requiredCheck(specField); err != nil {
+						return err
+					}
 				}
 
 			case reflect.Slice:
@@ -326,6 +380,30 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}) (bool, error) {
 	}, reflect.ValueOf(dstObject), reflect.ValueOf(srcObject))
 
 	return chg, err
+}
+
+func NewRequestFromObject(serviceName, methodName string, obj interface{}) (*Request, error) {
+	js, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	var data structpb.Struct
+	if err = json.Unmarshal(js, &data); err != nil {
+		return nil, err
+	}
+	return &Request{
+		ServiceName: serviceName,
+		MethodName:  methodName,
+		Data:        &data,
+	}, nil
+}
+
+func DecodeStruct(data *structpb.Struct, obj interface{}) error {
+	js, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(js, &obj)
 }
 
 func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct) error {

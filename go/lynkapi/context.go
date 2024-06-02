@@ -12,14 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datax
+package lynkapi
 
 import (
-	"encoding/json"
-	"fmt"
+	"context"
 )
 
-func jsonPrint(o interface{}) {
-	js, _ := json.MarshalIndent(o, "", "  ")
-	fmt.Println(string(js))
+type Context interface {
+	context.Context
+	RequestSpec() *Spec
+}
+
+type xContext struct {
+	context.Context
+	spec *Spec
+}
+
+func (it *xContext) RequestSpec() *Spec {
+	return it.spec
 }

@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datax_test
+package lynkapi_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/lynkdb/lynkx/datax"
+	"github.com/lynkdb/lynkapi/go/lynkapi"
 	// "google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -30,14 +30,14 @@ func Test_DataMerge(t *testing.T) {
 
 	type Obj struct {
 		Name       string    `json:"name" toml:"name"`
-		Int        int64     `json:"int" toml:"int" datax_value_limits:"10,20,30"`
+		Int        int64     `json:"int" toml:"int" lynkapi_value_limits:"10,20,30"`
 		Obj1       Obj1      `json:"obj1" toml:"obj1"`
 		Obj2       *Obj1     `json:"obj2" toml:"obj2"`
 		Array      []string  `json:"array" toml:"array"`
 		ArrayFloat []float64 `json:"array_float" toml:"array_float"`
 	}
 
-	spec, _, err := datax.NewSpecFromStruct(Obj{})
+	spec, _, err := lynkapi.NewSpecFromStruct(Obj{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func Test_DataUpdate(t *testing.T) {
 		ArrayFloat []float64 `json:"array_float" toml:"array_float"`
 	}
 
-	spec, _, err := datax.NewSpecFromStruct(Obj{})
+	spec, _, err := lynkapi.NewSpecFromStruct(Obj{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func Test_DataUpdate(t *testing.T) {
 		},
 	})
 
-	if err := datax.DataUpdate(spec, base, update); err != nil {
+	if err := lynkapi.DataUpdate(spec, base, update); err != nil {
 		t.Fatal(err)
 	}
 

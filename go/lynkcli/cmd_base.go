@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cli
+package lynkcli
 
 import (
 	"bytes"
@@ -27,26 +27,26 @@ import (
 
 var (
 	mu      sync.Mutex
-	arrCmds []baseCommandAction
-	idxCmds = map[string]baseCommandAction{}
+	arrCmds []BaseCommandAction
+	idxCmds = map[string]BaseCommandAction{}
 )
 
-type baseCommandSpec struct {
+type BaseCommandSpec struct {
 	Mgr  bool
 	Path string
 	Desc string
 }
 
-type baseCommandAction interface {
-	Spec() baseCommandSpec
-	Action(fg flagSet, l *readline.Instance) (string, error)
+type BaseCommandAction interface {
+	Spec() BaseCommandSpec
+	Action(fg FlagSet, l *readline.Instance) (string, error)
 }
 
 func init() {
-	register(new(cmdHelp))
+	RegisterCommonCommand(new(cmdHelp))
 }
 
-func register(fn baseCommandAction) {
+func RegisterCommonCommand(fn BaseCommandAction) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := idxCmds[fn.Spec().Path]; !ok {
@@ -61,13 +61,13 @@ func register(fn baseCommandAction) {
 
 type cmdHelp struct{}
 
-func (cmdHelp) Spec() baseCommandSpec {
-	return baseCommandSpec{
+func (cmdHelp) Spec() BaseCommandSpec {
+	return BaseCommandSpec{
 		Path: "help",
 	}
 }
 
-func (cmdHelp) Action(fg flagSet, l *readline.Instance) (string, error) {
+func (cmdHelp) Action(fg FlagSet, l *readline.Instance) (string, error) {
 
 	var tbuf bytes.Buffer
 
@@ -145,7 +145,7 @@ func cliInvoke(s string, l *readline.Instance) (string, error) {
 			fg.path = ""
 		}
 
-		fg.varArgs = flagVarParse(fg.path)
+		fg.VarArgs = flagVarParse(fg.path)
 
 		return c.Action(fg, l)
 	}

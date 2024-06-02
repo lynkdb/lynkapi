@@ -1,0 +1,68 @@
+// Copyright 2024 Eryx <evorui at gmail dot com>, All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package lynkdb.lynkapi;
+
+option optimize_for = LITE_RUNTIME;
+option go_package = ".;lynkapi";
+
+// import "google/protobuf/descriptor.proto";
+import "google/protobuf/struct.proto";
+
+import "lynkdb/lynkapi/type.proto";
+import "lynkdb/lynkapi/data.proto";
+
+message ServiceStatus {
+  string code = 1;
+  string message = 2;
+}
+
+message ServiceMethod {
+  string name = 1;
+  Spec request_spec = 4;
+  Spec response_spec = 6;
+}
+
+message ServiceInstance {
+  string name = 1;
+  repeated ServiceMethod methods = 9;
+}
+
+message ApiListRequest {}
+
+message ApiListResponse {
+  string kind = 1;
+  ServiceStatus status = 2;
+  repeated ServiceInstance services = 3;
+}
+
+message Request {
+  string service_name = 1;
+  string method_name = 2;
+  google.protobuf.Struct data = 8;
+}
+
+message Response {
+  string kind = 1;
+  ServiceStatus status = 2;
+  google.protobuf.Struct data = 8;
+}
+
+service DataxService {
+  rpc ApiList(ApiListRequest) returns (ApiListResponse) {}
+  rpc Exec(Request) returns (Response) {}
+  rpc DataQuery(lynkapi.DataQuery) returns (lynkapi.DataResult) {}
+}

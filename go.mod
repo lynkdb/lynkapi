@@ -1,4 +1,4 @@
-module github.com/lynkdb/lynkx
+module github.com/lynkdb/lynkapi
 
 go 1.22.3
 

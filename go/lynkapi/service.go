@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datax
+package lynkapi
 
 import (
 	"context"
@@ -111,7 +111,7 @@ func (it *DataxService) RegisterService(st interface{}) error {
 		it.mapServices[srvName] = srv
 		it.services = append(it.services, srv.instance)
 
-		hlog.Printf("info", "datax-service: init service instance %s", srv.instance.Name)
+		hlog.Printf("info", "lynkapi service: init service instance %s", srv.instance.Name)
 	}
 
 	// common methods
@@ -152,7 +152,7 @@ func (it *DataxService) RegisterService(st interface{}) error {
 		var funType = 0
 		if reqCtx := method.Type.In(1); reqCtx.PkgPath() == "context" && reqCtx.Name() == "Context" {
 			funType = kServiceMethodType_Grpc
-		} else if reqCtx.PkgPath() == "github.com/lynkdb/lynkx/datax" && reqCtx.Name() == "Context" {
+		} else if reqCtx.PkgPath() == "github.com/lynkdb/lynkapi/go/lynkapi" && reqCtx.Name() == "Context" {
 			funType = kServiceMethodType_Std
 		} else {
 			continue
@@ -211,7 +211,7 @@ func (it *DataxService) RegisterService(st interface{}) error {
 		srv.mapMethods[method.Name] = srvMethod
 		srv.instance.Methods = append(srv.instance.Methods, srvMethod)
 
-		hlog.Printf("info", "datax init service instance %s, method %s",
+		hlog.Printf("info", "lynkapi init service instance %s, method %s",
 			srv.instance.Name, method.Name)
 
 		it.mapServiceMethods[srvName+"."+method.Name] = &serviceMethod{
@@ -348,4 +348,29 @@ func (c DataxService) ApiListAction() {
 	c.RenderJson(&ApiListResponse{
 		Services: c.services,
 	})
+}
+
+func (it *Response) OK() bool {
+	if it.Status != nil {
+		return it.Status.OK()
+	}
+	return false
+}
+
+func (it *Response) Err() error {
+	if it.Status != nil {
+		return it.Status.Err()
+	}
+	return NewError(StatusCode_InternalServerError, "unknown error")
+}
+
+func (it *Response) Decode(obj interface{}) error {
+	js, err := json.Marshal(it.Data)
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(js, obj); err != nil {
+		return err
+	}
+	return nil
 }

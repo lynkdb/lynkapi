@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datax_test
+package lynkapi_test
 
 import (
 	"context"
@@ -21,7 +21,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/structpb"
 
-	"github.com/lynkdb/lynkx/datax"
+	"github.com/lynkdb/lynkapi/go/lynkapi"
 )
 
 type TestService struct{}
@@ -40,7 +40,7 @@ func (it *TestService) TestCall(ctx context.Context, req *TestRequest) (*TestRes
 	}, nil
 }
 
-func (it *TestService) TestStdCall(ctx datax.Context, req *TestRequest) (*TestResponse, error) {
+func (it *TestService) TestStdCall(ctx lynkapi.Context, req *TestRequest) (*TestResponse, error) {
 	return &TestResponse{
 		Content: "hello std " + req.Name,
 	}, nil
@@ -48,7 +48,7 @@ func (it *TestService) TestStdCall(ctx datax.Context, req *TestRequest) (*TestRe
 
 func Test_Service(t *testing.T) {
 
-	s := datax.NewService()
+	s := lynkapi.NewService()
 
 	err := s.RegisterService(&TestService{})
 	if err != nil {
@@ -57,7 +57,7 @@ func Test_Service(t *testing.T) {
 
 	//
 	{
-		rs, err := s.ApiList(nil, &datax.ApiListRequest{})
+		rs, err := s.ApiList(nil, &lynkapi.ApiListRequest{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -66,7 +66,7 @@ func Test_Service(t *testing.T) {
 
 	//
 	{
-		req := &datax.Request{
+		req := &lynkapi.Request{
 			ServiceName: "TestService",
 			MethodName:  "TestCall",
 			Data: &structpb.Struct{

@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datax
+package lynkapi
 
 import (
 	"errors"
 )
+
+func NewClientError(msg string) error {
+	return NewError(StatusCode_BadRequest, msg)
+}
 
 func NewBadRequestError(msg string) error {
 	return NewError(StatusCode_BadRequest, msg)
@@ -73,6 +77,12 @@ func (it *ServiceStatus) Err() error {
 		return errors.New("#" + it.Code + " " + it.Message)
 	}
 	return nil
+}
+
+func NewServiceStatusOK() *ServiceStatus {
+	return &ServiceStatus{
+		Code: StatusCode_OK,
+	}
 }
 
 func ParseError(err error) *ServiceStatus {

@@ -12,22 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datax
+package lynkapi
 
-import (
-	"context"
+// Service Status Codes
+const (
+	StatusCode_OK = "2000"
+
+	// Client error responses
+	StatusCode_BadRequest = "4000"
+	StatusCode_UnAuth     = "4010"
+	StatusCode_NotFound   = "4040"
+	StatusCode_Conflict   = "4090"
+	StatusCode_RateLimit  = "4290"
+
+	// Server error responses
+	StatusCode_InternalServerError = "5000"
+	StatusCode_NotImplemented      = "5010"
+	StatusCode_ServiceUnavailable  = "5030"
 )
 
-type Context interface {
-	context.Context
-	RequestSpec() *Spec
-}
+type DataMerge_Type int
 
-type xContext struct {
-	context.Context
-	spec *Spec
-}
+const (
+	DataMerge_UnSpec DataMerge_Type = iota
+	DataMerge_Create
+	DataMerge_Update
+	DataMerge_Delete
+)
 
-func (it *xContext) RequestSpec() *Spec {
-	return it.spec
-}
+const RequestSpecNameInContext = "lynkdb.lynkapi.Context.RequestSpec"

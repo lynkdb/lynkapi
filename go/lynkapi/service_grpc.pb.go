@@ -16,9 +16,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.3.0
 // - protoc             v4.25.3
-// source: datax.proto
+// source: lynkdb/lynkapi/service.proto
 
-package datax
+package lynkapi
 
 import (
 	context "context"
@@ -33,8 +33,9 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	DataxService_ApiList_FullMethodName = "/lynkdb.lynkx.datax.DataxService/ApiList"
-	DataxService_Exec_FullMethodName    = "/lynkdb.lynkx.datax.DataxService/Exec"
+	DataxService_ApiList_FullMethodName   = "/lynkdb.lynkapi.DataxService/ApiList"
+	DataxService_Exec_FullMethodName      = "/lynkdb.lynkapi.DataxService/Exec"
+	DataxService_DataQuery_FullMethodName = "/lynkdb.lynkapi.DataxService/DataQuery"
 )
 
 // DataxServiceClient is the client API for DataxService service.
@@ -43,6 +44,7 @@ const (
 type DataxServiceClient interface {
 	ApiList(ctx context.Context, in *ApiListRequest, opts ...grpc.CallOption) (*ApiListResponse, error)
 	Exec(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	DataQuery(ctx context.Context, in *DataQuery, opts ...grpc.CallOption) (*DataResult, error)
 }
 
 type dataxServiceClient struct {
@@ -71,12 +73,22 @@ func (c *dataxServiceClient) Exec(ctx context.Context, in *Request, opts ...grpc
 	return out, nil
 }
 
+func (c *dataxServiceClient) DataQuery(ctx context.Context, in *DataQuery, opts ...grpc.CallOption) (*DataResult, error) {
+	out := new(DataResult)
+	err := c.cc.Invoke(ctx, DataxService_DataQuery_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataxServiceServer is the server API for DataxService service.
 // All implementations must embed UnimplementedDataxServiceServer
 // for forward compatibility
 type DataxServiceServer interface {
 	ApiList(context.Context, *ApiListRequest) (*ApiListResponse, error)
 	Exec(context.Context, *Request) (*Response, error)
+	DataQuery(context.Context, *DataQuery) (*DataResult, error)
 	mustEmbedUnimplementedDataxServiceServer()
 }
 
@@ -89,6 +101,9 @@ func (UnimplementedDataxServiceServer) ApiList(context.Context, *ApiListRequest)
 }
 func (UnimplementedDataxServiceServer) Exec(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Exec not implemented")
+}
+func (UnimplementedDataxServiceServer) DataQuery(context.Context, *DataQuery) (*DataResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DataQuery not implemented")
 }
 func (UnimplementedDataxServiceServer) mustEmbedUnimplementedDataxServiceServer() {}
 
@@ -139,11 +154,29 @@ func _DataxService_Exec_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataxService_DataQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DataQuery)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataxServiceServer).DataQuery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataxService_DataQuery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataxServiceServer).DataQuery(ctx, req.(*DataQuery))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataxService_ServiceDesc is the grpc.ServiceDesc for DataxService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var DataxService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "lynkdb.lynkx.datax.DataxService",
+	ServiceName: "lynkdb.lynkapi.DataxService",
 	HandlerType: (*DataxServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -154,7 +187,11 @@ var DataxService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Exec",
 			Handler:    _DataxService_Exec_Handler,
 		},
+		{
+			MethodName: "DataQuery",
+			Handler:    _DataxService_DataQuery_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "datax.proto",
+	Metadata: "lynkdb/lynkapi/service.proto",
 }
