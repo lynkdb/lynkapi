@@ -55,6 +55,7 @@ func mgrSetup() error {
 		return err
 	}
 	if len(rs.Services) == 0 {
+		return nil
 		return fmt.Errorf("service not ready 0")
 	}
 	for _, srv := range rs.Services {
@@ -221,8 +222,9 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.Spec) (string, error) {
 		return "", nil
 	}
 
-	if specField, specData := spec.Rows(data); specData != nil &&
-		len(specField.Fields) > 0 && len(specData.Values) > 0 {
+	specField, specData := spec.Rows(data)
+
+	if specData != nil && len(specField.Fields) > 0 && len(specData.Values) > 0 {
 
 		var (
 			mapFields  = map[string]int{}
@@ -248,6 +250,7 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.Spec) (string, error) {
 		for _, row := range specData.Values {
 
 			structValue := row.GetStructValue()
+			// fmt.Println(structValue)
 			if structValue == nil || len(structValue.Fields) == 0 {
 				continue
 			}

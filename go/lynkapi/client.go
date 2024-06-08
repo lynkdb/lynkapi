@@ -27,10 +27,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const (
-	grpcMsgByteMax = 12 << 20
-)
-
 var (
 	rpcClientConns = map[string]*grpc.ClientConn{}
 	rpcClientMu    sync.Mutex
@@ -55,7 +51,7 @@ type clientImpl struct {
 	_ak     string
 	cfg     *ClientConfig
 	rpcConn *grpc.ClientConn
-	ac      DataxServiceClient
+	ac      LynkServiceClient
 	err     error
 }
 
@@ -86,7 +82,7 @@ func (it *ClientConfig) NewClient() (*clientImpl, error) {
 			_ak:     ak,
 			cfg:     it,
 			rpcConn: conn,
-			ac:      NewDataxServiceClient(conn),
+			ac:      NewLynkServiceClient(conn),
 		}
 		clientConns[ak] = clientConn
 	}
@@ -133,6 +129,28 @@ func (it *clientImpl) Exec(req *Request) *Response {
 			}
 		}
 		return &Response{
+			Status: ParseError(err),
+		}
+	}
+	if rs.Status == nil {
+		rs.Status = NewServiceStatusOK()
+	}
+	return rs
+}
+
+func (it *clientImpl) DataProject(req *DataProjectRequest) *DataProjectResponse {
+
+	ctx, fc := context.WithTimeout(context.Background(), it.cfg.timeout())
+	defer fc()
+
+	rs, err := it.ac.DataProject(ctx, req)
+	if err != nil {
+		if status, ok := status.FromError(err); ok && len(status.Message()) > 5 {
+			return &DataProjectResponse{
+				Status: ParseError(errors.New(status.Message())),
+			}
+		}
+		return &DataProjectResponse{
 			Status: ParseError(err),
 		}
 	}

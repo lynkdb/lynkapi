@@ -1,13 +1,13 @@
 syntax = "proto3";
 
-package lynkdb.lynkapi;
+package lynkapi;
 
 option optimize_for = LITE_RUNTIME;
-option go_package = ".;lynkapi";
+option go_package = "github.com/lynkdb/lynkapi/go/lynkapi;lynkapi";
 
 import "google/protobuf/struct.proto";
 
-import "lynkdb/lynkapi/type.proto";
+import "lynkapi/type.proto";
 
 // database
 
@@ -45,7 +45,7 @@ message DataConnect {
 message DataInstance {
   string kind = 1;
   string name = 2;  // `x_attrs:"name_identifier"`
-  string type = 3;  // `x_enums:"table,kv"`
+  string type = 3;  // `x_enums:"table,kv,oneobject"`
   DataConnect connect = 8;
   DataSpec spec = 9;
 }
@@ -63,7 +63,7 @@ message DataQuery {
   message Filter {
     string type = 1;  // `x_enums:",and,or"`
     string name = 2;
-    string value = 3;
+    google.protobuf.Value value = 3;
     repeated Filter inner = 4;
   }
   message SortFilter {
@@ -80,13 +80,34 @@ message DataQuery {
   int64 limit = 9;
 }
 
-// message DataUpsertRequest {
-//   string instance_name = 2;  // `x_attrs:"name_identifier"`
-//   string table_name = 3;     // `x_attrs:"name_identifier"`
-//   repeated string fields = 5;
-//   repeated string values = 6;
-//   DataQuery.Filter filter = 7;
-// }
+message DataInsert {
+  string instance_name = 2;  // `x_attrs:"name_identifier"`
+  string table_name = 3;     // `x_attrs:"name_identifier"`
+  repeated string fields = 5;
+  repeated google.protobuf.Value values = 6;
+}
+
+message DataUpdate {
+  string instance_name = 2;  // `x_attrs:"name_identifier"`
+  string table_name = 3;     // `x_attrs:"name_identifier"`
+  repeated string fields = 5;
+  repeated google.protobuf.Value values = 6;
+  DataQuery.Filter filter = 7;
+}
+
+message DataUpsert {
+  string instance_name = 2;  // `x_attrs:"name_identifier"`
+  string table_name = 3;     // `x_attrs:"name_identifier"`
+  repeated string fields = 5;
+  repeated google.protobuf.Value values = 6;
+  DataQuery.Filter filter = 7;
+}
+
+message DataDelete {
+  string instance_name = 2;  // `x_attrs:"name_identifier"`
+  string table_name = 3;     // `x_attrs:"name_identifier"`
+  DataQuery.Filter filter = 7;
+}
 
 message DataResult {
   string kind = 1;

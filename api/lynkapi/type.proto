@@ -14,11 +14,10 @@
 
 syntax = "proto3";
 
-package lynkdb.lynkapi;
+package lynkapi;
 
 option optimize_for = LITE_RUNTIME;
-// option go_package = "github.com/lynkdb/lynkapi/lynkapi;lynkapi";
-option go_package = ".;lynkapi";
+option go_package = "github.com/lynkdb/lynkapi/go/lynkapi;lynkapi";
 
 // import "google/protobuf/descriptor.proto";
 import "google/protobuf/struct.proto";

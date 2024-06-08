@@ -27,9 +27,9 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-type DataxService struct {
+type LynkService struct {
 	*httpsrv.Controller
-	UnimplementedDataxServiceServer
+	UnimplementedLynkServiceServer
 
 	mu sync.RWMutex
 
@@ -37,6 +37,8 @@ type DataxService struct {
 	mapServices map[string]*serviceInstance
 
 	mapServiceMethods map[string]*serviceMethod
+
+	dataProject *dataProjectManager
 }
 
 type serviceInstance struct {
@@ -62,10 +64,11 @@ type serviceMethod struct {
 	refPreMethod    *reflect.Method
 }
 
-func NewService() *DataxService {
-	return &DataxService{
+func NewService() *LynkService {
+	return &LynkService{
 		mapServices:       map[string]*serviceInstance{},
 		mapServiceMethods: map[string]*serviceMethod{},
+		dataProject:       newDataProjectManager(),
 	}
 }
 
@@ -77,14 +80,14 @@ func refTypeKind(rt reflect.Type) string {
 	return fmt.Sprintf("%s%s", pkgPath, rt.Name())
 }
 
-func (it *DataxService) RegisterService(st interface{}) error {
+func (it *LynkService) RegisterService(st interface{}) error {
 
 	if st == nil {
 		return errors.New("invalid object")
 	}
 
-	if _, ok := st.(*DataxService); ok {
-		return fmt.Errorf("invalid object ref")
+	if _, ok := st.(*LynkService); ok {
+		// return fmt.Errorf("invalid object ref")
 	}
 
 	rt := reflect.TypeOf(st)
@@ -228,7 +231,7 @@ func (it *DataxService) RegisterService(st interface{}) error {
 	return nil
 }
 
-func (it *DataxService) lookup(req *Request) *serviceMethod {
+func (it *LynkService) lookup(req *Request) *serviceMethod {
 	it.mu.Lock()
 	defer it.mu.Unlock()
 
@@ -240,7 +243,11 @@ func (it *DataxService) lookup(req *Request) *serviceMethod {
 	return hit
 }
 
-func (it *DataxService) ApiList(
+func (it *LynkService) RegisterDataService(ds DataService) error {
+	return it.dataProject.RegisterService(ds)
+}
+
+func (it *LynkService) ApiList(
 	ctx context.Context,
 	req *ApiListRequest,
 ) (*ApiListResponse, error) {
@@ -249,7 +256,7 @@ func (it *DataxService) ApiList(
 	}, nil
 }
 
-func (it *DataxService) ApiMethod(
+func (it *LynkService) ApiMethod(
 	ctx context.Context,
 	req *Request,
 ) (*ServiceMethod, error) {
@@ -266,7 +273,7 @@ func (it *DataxService) ApiMethod(
 	return method, nil
 }
 
-func (it *DataxService) Exec(
+func (it *LynkService) Exec(
 	ctx context.Context,
 	req *Request,
 ) (*Response, error) {
@@ -344,7 +351,30 @@ func (it *DataxService) Exec(
 	}, nil
 }
 
-func (c DataxService) ApiListAction() {
+func (it *LynkService) DataProject(
+	ctx context.Context,
+	req *DataProjectRequest,
+) (*DataProjectResponse, error) {
+	return &DataProjectResponse{
+		Status:    NewServiceStatusOK(),
+		Instances: it.dataProject.project.Instances,
+	}, nil
+}
+
+func (it *LynkService) DataQuery(
+	ctx context.Context,
+	req *DataQuery,
+) (*DataResult, error) {
+
+	ds := it.dataProject.service(req.InstanceName)
+	if ds == nil {
+		return nil, NewNotFoundError("instance not found")
+	}
+
+	return ds.Query(req)
+}
+
+func (c LynkService) ApiListAction() {
 	c.RenderJson(&ApiListResponse{
 		Services: c.services,
 	})

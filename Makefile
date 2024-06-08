@@ -13,7 +13,7 @@
 # limitations under the License.
 
 PROTOC_CMD = protoc
-PROTOC_ARGS = --proto_path=./ --go_out=./go/lynkapi --go-grpc_out=./go/lynkapi ./lynkdb/lynkapi/*.proto
+PROTOC_ARGS = --proto_path=./api --go_out=paths=source_relative:./go --go-grpc_out=paths=source_relative:./go ./api/lynkapi/*.proto
 
 FITTER_CMD = ./lynkapi-fitter
 FITTER_ARGS = ./go/lynkapi

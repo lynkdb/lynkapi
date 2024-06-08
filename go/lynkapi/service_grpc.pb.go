@@ -16,7 +16,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.3.0
 // - protoc             v4.25.3
-// source: lynkdb/lynkapi/service.proto
+// source: lynkapi/service.proto
 
 package lynkapi
 
@@ -33,165 +33,202 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	DataxService_ApiList_FullMethodName   = "/lynkdb.lynkapi.DataxService/ApiList"
-	DataxService_Exec_FullMethodName      = "/lynkdb.lynkapi.DataxService/Exec"
-	DataxService_DataQuery_FullMethodName = "/lynkdb.lynkapi.DataxService/DataQuery"
+	LynkService_ApiList_FullMethodName     = "/lynkapi.LynkService/ApiList"
+	LynkService_Exec_FullMethodName        = "/lynkapi.LynkService/Exec"
+	LynkService_DataProject_FullMethodName = "/lynkapi.LynkService/DataProject"
+	LynkService_DataQuery_FullMethodName   = "/lynkapi.LynkService/DataQuery"
 )
 
-// DataxServiceClient is the client API for DataxService service.
+// LynkServiceClient is the client API for LynkService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type DataxServiceClient interface {
+type LynkServiceClient interface {
 	ApiList(ctx context.Context, in *ApiListRequest, opts ...grpc.CallOption) (*ApiListResponse, error)
 	Exec(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	DataProject(ctx context.Context, in *DataProjectRequest, opts ...grpc.CallOption) (*DataProjectResponse, error)
 	DataQuery(ctx context.Context, in *DataQuery, opts ...grpc.CallOption) (*DataResult, error)
 }
 
-type dataxServiceClient struct {
+type lynkServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewDataxServiceClient(cc grpc.ClientConnInterface) DataxServiceClient {
-	return &dataxServiceClient{cc}
+func NewLynkServiceClient(cc grpc.ClientConnInterface) LynkServiceClient {
+	return &lynkServiceClient{cc}
 }
 
-func (c *dataxServiceClient) ApiList(ctx context.Context, in *ApiListRequest, opts ...grpc.CallOption) (*ApiListResponse, error) {
+func (c *lynkServiceClient) ApiList(ctx context.Context, in *ApiListRequest, opts ...grpc.CallOption) (*ApiListResponse, error) {
 	out := new(ApiListResponse)
-	err := c.cc.Invoke(ctx, DataxService_ApiList_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, LynkService_ApiList_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *dataxServiceClient) Exec(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+func (c *lynkServiceClient) Exec(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
-	err := c.cc.Invoke(ctx, DataxService_Exec_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, LynkService_Exec_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *dataxServiceClient) DataQuery(ctx context.Context, in *DataQuery, opts ...grpc.CallOption) (*DataResult, error) {
+func (c *lynkServiceClient) DataProject(ctx context.Context, in *DataProjectRequest, opts ...grpc.CallOption) (*DataProjectResponse, error) {
+	out := new(DataProjectResponse)
+	err := c.cc.Invoke(ctx, LynkService_DataProject_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *lynkServiceClient) DataQuery(ctx context.Context, in *DataQuery, opts ...grpc.CallOption) (*DataResult, error) {
 	out := new(DataResult)
-	err := c.cc.Invoke(ctx, DataxService_DataQuery_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, LynkService_DataQuery_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// DataxServiceServer is the server API for DataxService service.
-// All implementations must embed UnimplementedDataxServiceServer
+// LynkServiceServer is the server API for LynkService service.
+// All implementations must embed UnimplementedLynkServiceServer
 // for forward compatibility
-type DataxServiceServer interface {
+type LynkServiceServer interface {
 	ApiList(context.Context, *ApiListRequest) (*ApiListResponse, error)
 	Exec(context.Context, *Request) (*Response, error)
+	DataProject(context.Context, *DataProjectRequest) (*DataProjectResponse, error)
 	DataQuery(context.Context, *DataQuery) (*DataResult, error)
-	mustEmbedUnimplementedDataxServiceServer()
+	mustEmbedUnimplementedLynkServiceServer()
 }
 
-// UnimplementedDataxServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedDataxServiceServer struct {
+// UnimplementedLynkServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedLynkServiceServer struct {
 }
 
-func (UnimplementedDataxServiceServer) ApiList(context.Context, *ApiListRequest) (*ApiListResponse, error) {
+func (UnimplementedLynkServiceServer) ApiList(context.Context, *ApiListRequest) (*ApiListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApiList not implemented")
 }
-func (UnimplementedDataxServiceServer) Exec(context.Context, *Request) (*Response, error) {
+func (UnimplementedLynkServiceServer) Exec(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Exec not implemented")
 }
-func (UnimplementedDataxServiceServer) DataQuery(context.Context, *DataQuery) (*DataResult, error) {
+func (UnimplementedLynkServiceServer) DataProject(context.Context, *DataProjectRequest) (*DataProjectResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DataProject not implemented")
+}
+func (UnimplementedLynkServiceServer) DataQuery(context.Context, *DataQuery) (*DataResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DataQuery not implemented")
 }
-func (UnimplementedDataxServiceServer) mustEmbedUnimplementedDataxServiceServer() {}
+func (UnimplementedLynkServiceServer) mustEmbedUnimplementedLynkServiceServer() {}
 
-// UnsafeDataxServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to DataxServiceServer will
+// UnsafeLynkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to LynkServiceServer will
 // result in compilation errors.
-type UnsafeDataxServiceServer interface {
-	mustEmbedUnimplementedDataxServiceServer()
+type UnsafeLynkServiceServer interface {
+	mustEmbedUnimplementedLynkServiceServer()
 }
 
-func RegisterDataxServiceServer(s grpc.ServiceRegistrar, srv DataxServiceServer) {
-	s.RegisterService(&DataxService_ServiceDesc, srv)
+func RegisterLynkServiceServer(s grpc.ServiceRegistrar, srv LynkServiceServer) {
+	s.RegisterService(&LynkService_ServiceDesc, srv)
 }
 
-func _DataxService_ApiList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _LynkService_ApiList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ApiListRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DataxServiceServer).ApiList(ctx, in)
+		return srv.(LynkServiceServer).ApiList(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DataxService_ApiList_FullMethodName,
+		FullMethod: LynkService_ApiList_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DataxServiceServer).ApiList(ctx, req.(*ApiListRequest))
+		return srv.(LynkServiceServer).ApiList(ctx, req.(*ApiListRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DataxService_Exec_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _LynkService_Exec_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DataxServiceServer).Exec(ctx, in)
+		return srv.(LynkServiceServer).Exec(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DataxService_Exec_FullMethodName,
+		FullMethod: LynkService_Exec_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DataxServiceServer).Exec(ctx, req.(*Request))
+		return srv.(LynkServiceServer).Exec(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DataxService_DataQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _LynkService_DataProject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DataProjectRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LynkServiceServer).DataProject(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LynkService_DataProject_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LynkServiceServer).DataProject(ctx, req.(*DataProjectRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LynkService_DataQuery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DataQuery)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DataxServiceServer).DataQuery(ctx, in)
+		return srv.(LynkServiceServer).DataQuery(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DataxService_DataQuery_FullMethodName,
+		FullMethod: LynkService_DataQuery_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DataxServiceServer).DataQuery(ctx, req.(*DataQuery))
+		return srv.(LynkServiceServer).DataQuery(ctx, req.(*DataQuery))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// DataxService_ServiceDesc is the grpc.ServiceDesc for DataxService service.
+// LynkService_ServiceDesc is the grpc.ServiceDesc for LynkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var DataxService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "lynkdb.lynkapi.DataxService",
-	HandlerType: (*DataxServiceServer)(nil),
+var LynkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "lynkapi.LynkService",
+	HandlerType: (*LynkServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "ApiList",
-			Handler:    _DataxService_ApiList_Handler,
+			Handler:    _LynkService_ApiList_Handler,
 		},
 		{
 			MethodName: "Exec",
-			Handler:    _DataxService_Exec_Handler,
+			Handler:    _LynkService_Exec_Handler,
+		},
+		{
+			MethodName: "DataProject",
+			Handler:    _LynkService_DataProject_Handler,
 		},
 		{
 			MethodName: "DataQuery",
-			Handler:    _DataxService_DataQuery_Handler,
+			Handler:    _LynkService_DataQuery_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "lynkdb/lynkapi/service.proto",
+	Metadata: "lynkapi/service.proto",
 }

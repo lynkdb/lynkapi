@@ -14,6 +14,10 @@
 
 package lynkapi
 
+import (
+	"regexp"
+)
+
 // Service Status Codes
 const (
 	StatusCode_OK = "2000"
@@ -41,3 +45,8 @@ const (
 )
 
 const RequestSpecNameInContext = "lynkdb.lynkapi.Context.RequestSpec"
+
+var (
+	// name identifier
+	NameIdentifier = regexp.MustCompile("^[a-zA-Z][a-zA-Z0-9_]{0,63}$")
+)

@@ -59,6 +59,16 @@ type RegSpec struct {
 
 var specSet SpecSet
 
+// SpecField_Array_Value `array:{value type}`
+func specArrayType(t string) string {
+	return "array:" + t
+}
+
+// SpecField_Map_Key_Value `{key type}:{value type}`
+func specMapType(keyType, valueType string) string {
+	return keyType + ":" + valueType
+}
+
 func (it *Spec) Field(name string) *SpecField {
 	for _, field := range it.Fields {
 		if field.TagName == name || field.Name == name {
@@ -70,18 +80,14 @@ func (it *Spec) Field(name string) *SpecField {
 
 func (it *Spec) Rows(data *structpb.Struct) (*SpecField, *structpb.ListValue) {
 	if len(it.Fields) > 0 && len(data.Fields) > 0 {
-		var field *SpecField
 		for _, specField := range it.Fields {
 			if slices.Contains(specField.Attrs, "rows") &&
 				strings.HasPrefix(specField.Type, "array:") {
-				field = specField
-				break
-			}
-		}
-		if field != nil {
-			if rows, ok := data.Fields[field.TagName]; ok {
-				if lv := rows.GetListValue(); lv != nil {
-					return field, lv
+
+				if rows, ok := data.Fields[specField.TagName]; ok {
+					if lv := rows.GetListValue(); lv != nil {
+						return specField, lv
+					}
 				}
 			}
 		}
@@ -104,6 +110,29 @@ func (it *SpecField) Field(name string) *SpecField {
 
 func (it *SpecField) HasAttr(attr string) bool {
 	return slices.Contains(it.Attrs, attr)
+}
+
+func (it *SpecField) PrimaryKeys() ([]string, map[string]*SpecField) {
+	if it.Type == specArrayType(SpecField_Struct) {
+		var pkeys []*SpecField
+		for _, field := range it.Fields {
+			if field.HasAttr("primary_key") {
+				pkeys = append(pkeys, field)
+			}
+		}
+		if len(pkeys) == 1 { // TODO multi primary-key
+			return []string{pkeys[0].TagName}, map[string]*SpecField{
+				pkeys[0].TagName: pkeys[0],
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (it *SpecField) DataMerge(dstObject, srcObject interface{}, opts ...interface{}) (bool, error) {
+	return specDataMerge(&Spec{
+		Fields: it.Fields,
+	}, dstObject, srcObject, opts...)
 }
 
 func (it *SpecSet) Register(o interface{}) error {
@@ -142,16 +171,6 @@ func (it *SpecSet) Get(kind string) *RegSpec {
 	return nil
 }
 
-// SpecField_Array_Value `array:{value type}`
-func specArrayType(t string) string {
-	return "array:" + t
-}
-
-// SpecField_Map_Key_Value `{key type}:{value type}`
-func specMapType(keyType, valueType string) string {
-	return keyType + ":" + valueType
-}
-
 func NewSpecFromStruct(obj interface{}) (*Spec, reflect.Type, error) {
 
 	if obj == nil {
@@ -159,6 +178,9 @@ func NewSpecFromStruct(obj interface{}) (*Spec, reflect.Type, error) {
 	}
 
 	rt := reflect.TypeOf(obj)
+	if rt.Kind() == reflect.Pointer {
+		rt = rt.Elem()
+	}
 	if rt.Kind() != reflect.Struct {
 		return nil, nil, fmt.Errorf("invalid object type")
 	}
@@ -485,11 +507,8 @@ func ParseStructValid(kind string, data *structpb.Struct) (interface{}, error) {
 		return nil, fmt.Errorf("spec kind (%s) not found", kind)
 	}
 	js, _ := json.Marshal(data)
-	fmt.Println(string(js))
-	fmt.Println(spec.Type)
 
 	obj := reflect.New(spec.Type).Interface()
-	fmt.Println(obj)
 	if err := json.Unmarshal(js, obj); err != nil {
 		return nil, err
 	}

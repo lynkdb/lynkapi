@@ -14,16 +14,16 @@
 
 syntax = "proto3";
 
-package lynkdb.lynkapi;
+package lynkapi;
 
 option optimize_for = LITE_RUNTIME;
-option go_package = ".;lynkapi";
+option go_package = "github.com/lynkdb/lynkapi/go/lynkapi;lynkapi";
 
 // import "google/protobuf/descriptor.proto";
 import "google/protobuf/struct.proto";
 
-import "lynkdb/lynkapi/type.proto";
-import "lynkdb/lynkapi/data.proto";
+import "lynkapi/type.proto";
+import "lynkapi/data.proto";
 
 message ServiceStatus {
   string code = 1;
@@ -46,7 +46,15 @@ message ApiListRequest {}
 message ApiListResponse {
   string kind = 1;
   ServiceStatus status = 2;
-  repeated ServiceInstance services = 3;
+  repeated ServiceInstance services = 3;  // `x_attrs:"rows"`
+}
+
+message DataProjectRequest {}
+
+message DataProjectResponse {
+  string kind = 1;
+  ServiceStatus status = 2;
+  repeated DataInstance instances = 3;  // `x_attrs:"rows"`
 }
 
 message Request {
@@ -61,8 +69,9 @@ message Response {
   google.protobuf.Struct data = 8;
 }
 
-service DataxService {
+service LynkService {
   rpc ApiList(ApiListRequest) returns (ApiListResponse) {}
   rpc Exec(Request) returns (Response) {}
+  rpc DataProject(DataProjectRequest) returns (DataProjectResponse) {}
   rpc DataQuery(lynkapi.DataQuery) returns (lynkapi.DataResult) {}
 }

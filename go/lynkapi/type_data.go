@@ -220,6 +220,10 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 			)
 
 			if !value.IsValid() {
+				value = srcValue.FieldByName(specField.TagName)
+			}
+
+			if !value.IsValid() {
 				if err := requiredCheck(specField); err != nil {
 					return err
 				}
@@ -230,8 +234,6 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 			if !dstField.CanSet() {
 				continue
 			}
-
-			// fmt.Println("field", specField.Name, "dstField", dstField, value)
 
 			switch value.Kind() {
 			case reflect.Bool:
@@ -398,6 +400,24 @@ func NewRequestFromObject(serviceName, methodName string, obj interface{}) (*Req
 	}, nil
 }
 
+func ConvertReflectValueToApiValue(value reflect.Value) (*structpb.Value, error) {
+	js, _ := json.Marshal(value.Interface())
+	var pbStruct structpb.Struct
+	if err := json.Unmarshal(js, &pbStruct); err != nil {
+		return nil, err
+	}
+	return structpb.NewStructValue(&pbStruct), nil
+}
+
+func ConvertReflectValueToMapValue(value reflect.Value) (map[string]*structpb.Value, error) {
+	js, _ := json.Marshal(value.Interface())
+	var fields = map[string]*structpb.Value{}
+	if err := json.Unmarshal(js, &fields); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
 func DecodeStruct(data *structpb.Struct, obj interface{}) error {
 	js, err := json.Marshal(data)
 	if err != nil {
@@ -486,7 +506,6 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 		if baseValue.Kind() != reflect.Struct {
 			return nil
 		}
-		fmt.Println("baseValue", baseValue)
 
 		for name, value := range updateData.Fields {
 
@@ -503,7 +522,6 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 			if !dstField.CanSet() {
 				continue
 			}
-			// fmt.Println("field", specField.Name, "dstField", dstField, value)
 
 			switch value.Kind.(type) {
 			case *structpb.Value_BoolValue:
@@ -576,7 +594,6 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 						return err
 					}
 				} else if dstField.Kind() == reflect.Struct {
-					fmt.Println("dst", dstField)
 					if err := dataUpdate(&Spec{
 						Fields: specField.Fields,
 					}, dstField, value.GetStructValue()); err != nil {

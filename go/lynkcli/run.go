@@ -77,7 +77,7 @@ func Run(args ...interface{}) error {
 
 	l, err := readline.NewEx(&readline.Config{
 		AutoComplete:        nil, // completer,
-		HistoryFile:         fmt.Sprintf("~/.%s_history", "lynkapi"),
+		HistoryFile:         fmt.Sprintf("~/.%s_history", "lynkcli"),
 		InterruptPrompt:     "^C",
 		EOFPrompt:           "exit",
 		HistorySearchFold:   true,
