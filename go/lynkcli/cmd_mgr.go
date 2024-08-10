@@ -185,7 +185,7 @@ func (it *mgrService) Action(fg FlagSet, l *readline.Instance) (string, error) {
 	reqData := &structpb.Struct{
 		Fields: map[string]*structpb.Value{},
 	}
-	if err := scanInput(ctx, 1, reqData, &lynkapi.SpecField{
+	if err := scanInput(ctx, 1, reqData, &lynkapi.FieldSpec{
 		Fields: m.RequestSpec.Fields,
 	}, l); err != nil {
 		return "", err
@@ -216,7 +216,7 @@ func (it *mgrService) Action(fg FlagSet, l *readline.Instance) (string, error) {
 	return str, nil
 }
 
-func iterOutput(data *structpb.Struct, spec *lynkapi.Spec) (string, error) {
+func iterOutput(data *structpb.Struct, spec *lynkapi.TypeSpec) (string, error) {
 
 	if data == nil {
 		return "", nil
@@ -272,13 +272,13 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.Spec) (string, error) {
 					if value.GetNumberValue() != 0 {
 						if fd := specField.Field(name); fd != nil {
 							switch fd.Type {
-							case lynkapi.SpecField_Int:
+							case lynkapi.FieldSpec_Int:
 								fieldValues[idx] = fmt.Sprintf("%d", int64(value.GetNumberValue()))
 
-							case lynkapi.SpecField_Uint:
+							case lynkapi.FieldSpec_Uint:
 								fieldValues[idx] = fmt.Sprintf("%d", uint64(value.GetNumberValue()))
 
-							case lynkapi.SpecField_Float:
+							case lynkapi.FieldSpec_Float:
 								fieldValues[idx] = fmt.Sprintf("%f", value.GetNumberValue())
 							}
 						}
@@ -329,12 +329,12 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.Spec) (string, error) {
 				if value.GetNumberValue() != 0 {
 					if specField := spec.Field(name); specField != nil {
 						switch specField.Type {
-						case lynkapi.SpecField_Int:
+						case lynkapi.FieldSpec_Int:
 							table.Append([]string{name, fmt.Sprintf("%d", int64(value.GetNumberValue()))})
 
-						case lynkapi.SpecField_Uint:
+						case lynkapi.FieldSpec_Uint:
 							table.Append([]string{name, fmt.Sprintf("%d", uint64(value.GetNumberValue()))})
-						case lynkapi.SpecField_Float:
+						case lynkapi.FieldSpec_Float:
 							table.Append([]string{name, fmt.Sprintf("%f", value.GetNumberValue())})
 						}
 					}
@@ -357,13 +357,13 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.Spec) (string, error) {
 	return "", fmt.Errorf("no response")
 }
 
-func scanInput(ctx *cliContext, depth int, data *structpb.Struct, specField *lynkapi.SpecField, l *readline.Instance) error {
+func scanInput(ctx *cliContext, depth int, data *structpb.Struct, specField *lynkapi.FieldSpec, l *readline.Instance) error {
 
 	for _, field := range specField.Fields {
 
 		prompt := fmt.Sprintf("%s%s", strings.Repeat(" ", depth*2), field.Name)
 
-		if field.Type == lynkapi.SpecField_Struct {
+		if field.Type == lynkapi.FieldSpec_Struct {
 
 			prompt += fmt.Sprintf(" (type `yes` to edit this sub-object, `no` to skip)")
 
@@ -421,38 +421,38 @@ func scanInput(ctx *cliContext, depth int, data *structpb.Struct, specField *lyn
 		}
 
 		switch field.Type {
-		case lynkapi.SpecField_String:
+		case lynkapi.FieldSpec_String:
 			data.Fields[field.TagName] = structpb.NewStringValue(v)
 
-		case lynkapi.SpecField_Int:
+		case lynkapi.FieldSpec_Int:
 			if num, err := strconv.ParseInt(v, 10, 64); err != nil {
 				return err
 			} else {
 				data.Fields[field.TagName] = structpb.NewNumberValue(float64(num))
 			}
 
-		case lynkapi.SpecField_Uint:
+		case lynkapi.FieldSpec_Uint:
 			if num, err := strconv.ParseUint(v, 10, 64); err != nil {
 				return err
 			} else {
 				data.Fields[field.TagName] = structpb.NewNumberValue(float64(num))
 			}
 
-		case lynkapi.SpecField_Float:
+		case lynkapi.FieldSpec_Float:
 			if num, err := strconv.ParseFloat(v, 64); err != nil {
 				return err
 			} else {
 				data.Fields[field.TagName] = structpb.NewNumberValue(float64(num))
 			}
 
-		case lynkapi.SpecField_Bool:
+		case lynkapi.FieldSpec_Bool:
 			if b, err := strconv.ParseBool(v); err != nil {
 				return err
 			} else {
 				data.Fields[field.TagName] = structpb.NewBoolValue(b)
 			}
 
-		case lynkapi.SpecField_Struct:
+		case lynkapi.FieldSpec_Struct:
 			structValue := &structpb.Struct{
 				Fields: map[string]*structpb.Value{},
 			}

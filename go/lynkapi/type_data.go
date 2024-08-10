@@ -11,12 +11,13 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interface{}) (bool, error) {
+func specDataMerge(spec *TypeSpec, dstObject, srcObject interface{}, opts ...interface{}) (bool, error) {
 
 	var (
 		chg        = false
-		dataMerge  func(spec *SpecField, dstValue, srcValue reflect.Value) error
-		arrayMerge func(spec *SpecField, dstValue, srcValue reflect.Value) error
+		dataMerge  func(spec *FieldSpec, dstValue, srcValue reflect.Value) error
+		arrayMerge func(spec *FieldSpec, dstValue, srcValue reflect.Value) error
+		mapMerge   func(spec *FieldSpec, dstValue, srcValue reflect.Value) error
 		mergeType  DataMerge_Type
 	)
 
@@ -30,7 +31,7 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 		}
 	}
 
-	arrayMerge = func(specField *SpecField, dstValue, srcValue reflect.Value) error {
+	arrayMerge = func(fieldSpec *FieldSpec, dstValue, srcValue reflect.Value) error {
 
 		if !dstValue.IsValid() {
 			return nil
@@ -41,34 +42,34 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 		}
 
 		var (
-			subType = specField.Type[len("array:"):]
+			subType = fieldSpec.Type[len("array:"):]
 		)
 
 		for i := 0; i < srcValue.Len(); i++ {
 
 			switch srcValue.Index(i).Kind() {
 			case reflect.Bool:
-				if subType != SpecField_Bool {
+				if subType != FieldSpec_Bool {
 					return fmt.Errorf("invalid array:bool type")
 				}
 
 			case reflect.String:
-				if subType != SpecField_String {
+				if subType != FieldSpec_String {
 					return fmt.Errorf("invalid array:string type")
 				}
 
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				if subType != SpecField_Int {
+				if subType != FieldSpec_Int {
 					return fmt.Errorf("invalid array:int type")
 				}
 
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				if subType != SpecField_Uint {
+				if subType != FieldSpec_Uint {
 					return fmt.Errorf("invalid array:uint type")
 				}
 
 			case reflect.Float32, reflect.Float64:
-				if subType != SpecField_Float {
+				if subType != FieldSpec_Float {
 					return fmt.Errorf("invalid array:float type")
 				}
 
@@ -83,7 +84,78 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 		return nil
 	}
 
-	fieldValueLimitsInt := func(field *SpecField) (int64, int64, int64) {
+	mapMerge = func(fieldSpec *FieldSpec, dstValue, srcValue reflect.Value) error {
+
+		if !dstValue.IsValid() {
+			return nil
+		}
+
+		if !srcValue.IsValid() || srcValue.Kind() != reflect.Map {
+			return nil
+		}
+
+		subType := strings.Split(fieldSpec.Type, ":")
+		if len(subType) != 2 || subType[0] != FieldSpec_String {
+			return nil
+		}
+
+		for iter := srcValue.MapRange(); iter != nil && iter.Next(); {
+
+			key := iter.Key()
+			val := iter.Value()
+
+			if key.Kind() != reflect.String {
+				continue
+			}
+
+			if val.Kind() == reflect.Pointer {
+				val = val.Elem()
+			}
+
+			switch val.Kind() {
+			case reflect.Bool:
+				if subType[1] != FieldSpec_Bool {
+					return fmt.Errorf("invalid map:bool type")
+				}
+
+			case reflect.String:
+				if subType[1] != FieldSpec_String {
+					return fmt.Errorf("invalid map:string type")
+				}
+
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				if subType[1] != FieldSpec_Int {
+					return fmt.Errorf("invalid map:int type")
+				}
+
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				if subType[1] != FieldSpec_Uint {
+					return fmt.Errorf("invalid map:uint type")
+				}
+
+			case reflect.Float32, reflect.Float64:
+				if subType[1] != FieldSpec_Float {
+					return fmt.Errorf("invalid map:float type")
+				}
+
+			case reflect.Struct:
+				if subType[1] != fieldSpec_Any &&
+					subType[1] != FieldSpec_Struct {
+					return fmt.Errorf("invalid map:any|struct type")
+				}
+
+			default:
+				return fmt.Errorf("invalid map: type %v", val.Kind())
+			}
+		}
+
+		chg = true
+		dstValue.Set(srcValue)
+
+		return nil
+	}
+
+	fieldValueLimitsInt := func(field *FieldSpec) (int64, int64, int64) {
 
 		var (
 			minValue int64 = math.MinInt64
@@ -91,7 +163,7 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 			maxValue int64 = math.MaxInt64
 		)
 
-		if len(field.Opts) > 0 && field.Type == SpecField_Int {
+		if len(field.Opts) > 0 && field.Type == FieldSpec_Int {
 
 			if v, ok := field.Opts["def_value"]; ok {
 				defValue = int64(v.GetNumberValue())
@@ -109,7 +181,7 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 		return minValue, defValue, maxValue
 	}
 
-	fieldValueLimitsUint := func(field *SpecField) (uint64, uint64, uint64) {
+	fieldValueLimitsUint := func(field *FieldSpec) (uint64, uint64, uint64) {
 
 		var (
 			minValue uint64 = 0
@@ -117,7 +189,7 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 			maxValue uint64 = math.MaxUint64
 		)
 
-		if len(field.Opts) > 0 && field.Type == SpecField_Uint {
+		if len(field.Opts) > 0 && field.Type == FieldSpec_Uint {
 
 			if v, ok := field.Opts["def_value"]; ok {
 				defValue = uint64(v.GetNumberValue())
@@ -135,7 +207,7 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 		return minValue, defValue, maxValue
 	}
 
-	fieldValueLimitsFloat := func(field *SpecField) (float64, float64, float64) {
+	fieldValueLimitsFloat := func(field *FieldSpec) (float64, float64, float64) {
 
 		var (
 			minValue float64 = math.SmallestNonzeroFloat64
@@ -143,7 +215,7 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 			maxValue float64 = math.MaxFloat64
 		)
 
-		if len(field.Opts) > 0 && field.Type == SpecField_Float {
+		if len(field.Opts) > 0 && field.Type == FieldSpec_Float {
 
 			if v, ok := field.Opts["def_value"]; ok {
 				defValue = v.GetNumberValue()
@@ -161,8 +233,8 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 		return minValue, defValue, maxValue
 	}
 
-	fieldValueLimitsString := func(field *SpecField) string {
-		if len(field.Opts) > 0 && field.Type == SpecField_String {
+	fieldValueLimitsString := func(field *FieldSpec) string {
+		if len(field.Opts) > 0 && field.Type == FieldSpec_String {
 			if v, ok := field.Opts["def_value"]; ok {
 				return v.GetStringValue()
 			}
@@ -170,7 +242,7 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 		return ""
 	}
 
-	requiredCheck := func(specField *SpecField) error {
+	requiredCheck := func(fieldSpec *FieldSpec) error {
 
 		if mergeType != DataMerge_Create &&
 			mergeType != DataMerge_Update {
@@ -179,19 +251,19 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 
 		switch mergeType {
 		case DataMerge_Create:
-			if specField.HasAttr("create_required") {
-				return fmt.Errorf("field %s update_required", specField.Name)
+			if fieldSpec.HasAttr("create_required") {
+				return fmt.Errorf("field %s update_required", fieldSpec.Name)
 			}
 
 		case DataMerge_Update:
-			if specField.HasAttr("update_required") {
-				return fmt.Errorf("field %s update_required", specField.Name)
+			if fieldSpec.HasAttr("update_required") {
+				return fmt.Errorf("field %s update_required", fieldSpec.Name)
 			}
 		}
 		return nil
 	}
 
-	dataMerge = func(spec *SpecField, dstValue, srcValue reflect.Value) error {
+	dataMerge = func(spec *FieldSpec, dstValue, srcValue reflect.Value) error {
 
 		if spec == nil || len(spec.Fields) == 0 ||
 			!dstValue.IsValid() ||
@@ -213,35 +285,35 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 			return nil
 		}
 
-		for _, specField := range spec.Fields {
+		for _, fieldSpec := range spec.Fields {
 
 			var (
-				value = srcValue.FieldByName(specField.Name)
+				value = srcValue.FieldByName(fieldSpec.Name)
 			)
 
 			if !value.IsValid() {
-				value = srcValue.FieldByName(specField.TagName)
+				value = srcValue.FieldByName(fieldSpec.TagName)
 			}
 
 			if !value.IsValid() {
-				if err := requiredCheck(specField); err != nil {
+				if err := requiredCheck(fieldSpec); err != nil {
 					return err
 				}
 				continue
 			}
 
-			dstField := dstValue.FieldByName(specField.Name)
+			dstField := dstValue.FieldByName(fieldSpec.Name)
 			if !dstField.CanSet() {
 				continue
 			}
 
 			switch value.Kind() {
 			case reflect.Bool:
-				if specField.Type != SpecField_Bool {
-					return fmt.Errorf("invalid field (%s) type (bool:%s)", specField.Name, specField.Type)
+				if fieldSpec.Type != FieldSpec_Bool {
+					return fmt.Errorf("invalid field (%s) type (bool:%s)", fieldSpec.Name, fieldSpec.Type)
 				}
 				if dstField.Kind() != reflect.Bool {
-					return fmt.Errorf("invalid field (%s) type (string:%v)", specField.Name, dstField.Kind())
+					return fmt.Errorf("invalid field (%s) type (string:%v)", fieldSpec.Name, dstField.Kind())
 				}
 				if value.Bool() != dstField.Bool() {
 					chg = true
@@ -249,16 +321,16 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 				}
 
 			case reflect.String:
-				if specField.Type != SpecField_String {
-					return fmt.Errorf("invalid field (%s) type (string:%s)", specField.Name, specField.Type)
+				if fieldSpec.Type != FieldSpec_String {
+					return fmt.Errorf("invalid field (%s) type (string:%s)", fieldSpec.Name, fieldSpec.Type)
 				}
 				if dstField.Kind() != reflect.String {
-					return fmt.Errorf("invalid field (%s) type (string:%v)", specField.Name, dstField.Kind())
+					return fmt.Errorf("invalid field (%s) type (string:%v)", fieldSpec.Name, dstField.Kind())
 				}
-				defValue := fieldValueLimitsString(specField)
+				defValue := fieldValueLimitsString(fieldSpec)
 				if value.String() != "" {
-					if len(specField.Enums) > 0 && !slices.Contains(specField.Enums, value.String()) {
-						return fmt.Errorf("field (%s), deny by enums", specField.Name)
+					if len(fieldSpec.Enums) > 0 && !slices.Contains(fieldSpec.Enums, value.String()) {
+						return fmt.Errorf("field (%s), deny by enums", fieldSpec.Name)
 					}
 					if dstField.String() != value.String() {
 						chg = true
@@ -268,19 +340,19 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 					chg = true
 					dstField.SetString(defValue)
 				} else {
-					if err := requiredCheck(specField); err != nil {
+					if err := requiredCheck(fieldSpec); err != nil {
 						return err
 					}
 				}
 
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				if specField.Type != SpecField_Int {
-					return fmt.Errorf("invalid field (%s) type (int:%v)", specField.Name, dstField.Kind())
+				if fieldSpec.Type != FieldSpec_Int {
+					return fmt.Errorf("invalid field (%s) type (int:%v)", fieldSpec.Name, dstField.Kind())
 				}
-				minValue, defValue, maxValue := fieldValueLimitsInt(specField)
+				minValue, defValue, maxValue := fieldValueLimitsInt(fieldSpec)
 				if value.Int() != 0 {
 					if value.Int() < minValue || value.Int() > maxValue {
-						return fmt.Errorf("field (%s) deny value limits [%d ~ %d]", specField.Name, minValue, maxValue)
+						return fmt.Errorf("field (%s) deny value limits [%d ~ %d]", fieldSpec.Name, minValue, maxValue)
 					}
 					if dstField.Int() != value.Int() {
 						chg = true
@@ -290,19 +362,19 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 					chg = true
 					dstField.SetInt(defValue)
 				} else {
-					if err := requiredCheck(specField); err != nil {
+					if err := requiredCheck(fieldSpec); err != nil {
 						return err
 					}
 				}
 
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				if specField.Type != SpecField_Uint {
-					return fmt.Errorf("invalid field (%s) type (uint:%v)", specField.Name, dstField.Kind())
+				if fieldSpec.Type != FieldSpec_Uint {
+					return fmt.Errorf("invalid field (%s) type (uint:%v)", fieldSpec.Name, dstField.Kind())
 				}
-				minValue, defValue, maxValue := fieldValueLimitsUint(specField)
+				minValue, defValue, maxValue := fieldValueLimitsUint(fieldSpec)
 				if value.Uint() != 0 {
 					if value.Uint() < minValue || value.Uint() > maxValue {
-						return fmt.Errorf("field (%s) deny value limits [%d ~ %d]", specField.Name, minValue, maxValue)
+						return fmt.Errorf("field (%s) deny value limits [%d ~ %d]", fieldSpec.Name, minValue, maxValue)
 					}
 					if dstField.Uint() != value.Uint() {
 						chg = true
@@ -312,19 +384,19 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 					chg = true
 					dstField.SetUint(defValue)
 				} else {
-					if err := requiredCheck(specField); err != nil {
+					if err := requiredCheck(fieldSpec); err != nil {
 						return err
 					}
 				}
 
 			case reflect.Float32, reflect.Float64:
-				if specField.Type != SpecField_Float {
-					return fmt.Errorf("invalid field (%s) type (float:%v)", specField.Name, dstField.Kind())
+				if fieldSpec.Type != FieldSpec_Float {
+					return fmt.Errorf("invalid field (%s) type (float:%v)", fieldSpec.Name, dstField.Kind())
 				}
-				minValue, defValue, maxValue := fieldValueLimitsFloat(specField)
+				minValue, defValue, maxValue := fieldValueLimitsFloat(fieldSpec)
 				if value.Float() != 0 {
 					if value.Float() < minValue || value.Float() > maxValue {
-						return fmt.Errorf("field (%s) deny value limits [%f ~ %f]", specField.Name, minValue, maxValue)
+						return fmt.Errorf("field (%s) deny value limits [%f ~ %f]", fieldSpec.Name, minValue, maxValue)
 					}
 					if dstField.Float() != value.Float() {
 						chg = true
@@ -334,40 +406,50 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 					chg = true
 					dstField.SetFloat(defValue)
 				} else {
-					if err := requiredCheck(specField); err != nil {
+					if err := requiredCheck(fieldSpec); err != nil {
 						return err
 					}
 				}
 
 			case reflect.Slice:
-				if !strings.HasPrefix(specField.Type, "array:") {
-					return fmt.Errorf("invalid field (%s) type (array:%s)", specField.Name, specField.Type)
+				if !strings.HasPrefix(fieldSpec.Type, "array:") {
+					return fmt.Errorf("invalid field (%s) type (array:%s)", fieldSpec.Name, fieldSpec.Type)
 				}
 				if dstField.Kind() != reflect.Slice {
-					return fmt.Errorf("invalid field (%s) type (array:%s)", specField.Name, specField.Type)
+					return fmt.Errorf("invalid field (%s) type (array:%s)", fieldSpec.Name, fieldSpec.Type)
+				}
+				if err := arrayMerge(fieldSpec, dstField, value); err != nil {
+					return err
 				}
 
-				if err := arrayMerge(specField, dstField, value); err != nil {
+			case reflect.Map:
+				if strings.Count(fieldSpec.Type, ":") != 1 {
+					return fmt.Errorf("invalid field (%s) type (map:%s)", fieldSpec.Name, fieldSpec.Type)
+				}
+				if dstField.Kind() != reflect.Map {
+					return fmt.Errorf("invalid field (%s) type (map:%s)", fieldSpec.Name, fieldSpec.Type)
+				}
+				if err := mapMerge(fieldSpec, dstField, value); err != nil {
 					return err
 				}
 
 			case reflect.Pointer, reflect.Struct:
-				if specField.Type != SpecField_Struct {
-					return fmt.Errorf("invalid field (%s) type (struct:%s)", specField.Name, specField.Type)
+				if fieldSpec.Type != FieldSpec_Struct {
+					return fmt.Errorf("invalid field (%s) type (struct:%s)", fieldSpec.Name, fieldSpec.Type)
 				}
 				if dstField.Kind() != reflect.Pointer && dstField.Kind() != reflect.Struct {
-					return fmt.Errorf("invalid field (%s) type (struct:%s)", specField.Name, specField.Type)
+					return fmt.Errorf("invalid field (%s) type (struct:%s)", fieldSpec.Name, fieldSpec.Type)
 				}
 				if dstField.Kind() == reflect.Pointer {
 					if dstField.IsNil() {
 						dstField.Set(reflect.New(dstField.Type().Elem()))
 					}
 
-					if err := dataMerge(specField, dstField, value); err != nil {
+					if err := dataMerge(fieldSpec, dstField, value); err != nil {
 						return err
 					}
 				} else if dstField.Kind() == reflect.Struct {
-					if err := dataMerge(specField, dstField, value); err != nil {
+					if err := dataMerge(fieldSpec, dstField, value); err != nil {
 						return err
 					}
 				}
@@ -377,7 +459,7 @@ func specDataMerge(spec *Spec, dstObject, srcObject interface{}, opts ...interfa
 		return nil
 	}
 
-	err := dataMerge(&SpecField{
+	err := dataMerge(&FieldSpec{
 		Fields: spec.Fields,
 	}, reflect.ValueOf(dstObject), reflect.ValueOf(srcObject))
 
@@ -426,23 +508,23 @@ func DecodeStruct(data *structpb.Struct, obj interface{}) error {
 	return json.Unmarshal(js, &obj)
 }
 
-func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct) error {
+func dataUpdate(spec *TypeSpec, baseObject interface{}, updateData *structpb.Struct) error {
 
 	var (
-		dataUpdate  func(spec *Spec, baseValue reflect.Value, updateData *structpb.Struct) error
-		arrayUpdate func(specField *SpecField, baseValue reflect.Value, updateData *structpb.ListValue) error
+		dataUpdate  func(spec *TypeSpec, baseValue reflect.Value, updateData *structpb.Struct) error
+		arrayUpdate func(fieldSpec *FieldSpec, baseValue reflect.Value, updateData *structpb.ListValue) error
 	)
 
-	arrayUpdate = func(specField *SpecField, baseValue reflect.Value, updateData *structpb.ListValue) error {
+	arrayUpdate = func(fieldSpec *FieldSpec, baseValue reflect.Value, updateData *structpb.ListValue) error {
 		if updateData == nil || len(updateData.Values) == 0 {
 			return nil
 		}
-		subType := specField.Type[6:]
+		subType := fieldSpec.Type[6:]
 
 		ls := []reflect.Value{}
 		switch subType {
 
-		case SpecField_String:
+		case FieldSpec_String:
 			for _, v := range updateData.Values {
 				switch v.Kind.(type) {
 				case *structpb.Value_StringValue:
@@ -452,7 +534,7 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 				}
 			}
 
-		case SpecField_Int:
+		case FieldSpec_Int:
 			for _, v := range updateData.Values {
 				switch v.Kind.(type) {
 				case *structpb.Value_NumberValue:
@@ -462,7 +544,7 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 				}
 			}
 
-		case SpecField_Uint:
+		case FieldSpec_Uint:
 			for _, v := range updateData.Values {
 				switch v.Kind.(type) {
 				case *structpb.Value_NumberValue:
@@ -472,7 +554,7 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 				}
 			}
 
-		case SpecField_Float:
+		case FieldSpec_Float:
 			for _, v := range updateData.Values {
 				switch v.Kind.(type) {
 				case *structpb.Value_NumberValue:
@@ -491,7 +573,7 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 		return nil
 	}
 
-	dataUpdate = func(spec *Spec, baseValue reflect.Value, updateData *structpb.Struct) error {
+	dataUpdate = func(spec *TypeSpec, baseValue reflect.Value, updateData *structpb.Struct) error {
 
 		if spec == nil || len(spec.Fields) == 0 ||
 			!baseValue.IsValid() ||
@@ -513,20 +595,20 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 				continue
 			}
 
-			specField := spec.Field(name)
-			if specField == nil {
+			fieldSpec := spec.Field(name)
+			if fieldSpec == nil {
 				continue
 			}
 
-			dstField := baseValue.FieldByName(specField.Name)
+			dstField := baseValue.FieldByName(fieldSpec.Name)
 			if !dstField.CanSet() {
 				continue
 			}
 
 			switch value.Kind.(type) {
 			case *structpb.Value_BoolValue:
-				if specField.Type != SpecField_Bool {
-					return fmt.Errorf("invalid field (%s) type (bool:%s)", name, specField.Type)
+				if fieldSpec.Type != FieldSpec_Bool {
+					return fmt.Errorf("invalid field (%s) type (bool:%s)", name, fieldSpec.Type)
 				}
 				if dstField.Kind() != reflect.Bool {
 					return fmt.Errorf("invalid field (%s) type (string:%v)", name, dstField.Kind())
@@ -534,8 +616,8 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 				dstField.SetBool(value.GetBoolValue())
 
 			case *structpb.Value_StringValue:
-				if specField.Type != SpecField_String {
-					return fmt.Errorf("invalid field (%s) type (string:%s)", name, specField.Type)
+				if fieldSpec.Type != FieldSpec_String {
+					return fmt.Errorf("invalid field (%s) type (string:%s)", name, fieldSpec.Type)
 				}
 				if value.GetStringValue() != "" {
 					if dstField.Kind() != reflect.String {
@@ -545,8 +627,8 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 				}
 
 			case *structpb.Value_NumberValue:
-				switch specField.Type {
-				case SpecField_Int, SpecField_Uint, SpecField_Float:
+				switch fieldSpec.Type {
+				case FieldSpec_Int, FieldSpec_Uint, FieldSpec_Float:
 					if value.GetNumberValue() != 0 {
 						switch dstField.Kind() {
 						case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
@@ -561,41 +643,41 @@ func dataUpdate(spec *Spec, baseObject interface{}, updateData *structpb.Struct)
 					}
 
 				default:
-					return fmt.Errorf("invalid field (%s) type (number:%s)", name, specField.Type)
+					return fmt.Errorf("invalid field (%s) type (number:%s)", name, fieldSpec.Type)
 				}
 
 			case *structpb.Value_ListValue:
-				if !strings.HasPrefix(specField.Type, "array:") {
-					return fmt.Errorf("invalid field (%s) type (struct:%s)", name, specField.Type)
+				if !strings.HasPrefix(fieldSpec.Type, "array:") {
+					return fmt.Errorf("invalid field (%s) type (struct:%s)", name, fieldSpec.Type)
 				}
 				if dstField.Kind() != reflect.Slice {
-					return fmt.Errorf("invalid field (%s) type (struct:%s)", name, specField.Type)
+					return fmt.Errorf("invalid field (%s) type (struct:%s)", name, fieldSpec.Type)
 				}
 
-				if err := arrayUpdate(specField, dstField, value.GetListValue()); err != nil {
+				if err := arrayUpdate(fieldSpec, dstField, value.GetListValue()); err != nil {
 					return err
 				}
 
 			case *structpb.Value_StructValue:
-				if specField.Type != SpecField_Struct {
-					return fmt.Errorf("invalid field (%s) type (struct:%s)", name, specField.Type)
+				if fieldSpec.Type != FieldSpec_Struct {
+					return fmt.Errorf("invalid field (%s) type (struct:%s)", name, fieldSpec.Type)
 				}
 				if dstField.Kind() != reflect.Pointer && dstField.Kind() != reflect.Struct {
-					return fmt.Errorf("invalid field (%s) type (struct:%s)", name, specField.Type)
+					return fmt.Errorf("invalid field (%s) type (struct:%s)", name, fieldSpec.Type)
 				}
 				if dstField.Kind() == reflect.Pointer {
 					if dstField.IsNil() {
 						dstField.Set(reflect.New(dstField.Type().Elem()))
 					}
 
-					if err := dataUpdate(&Spec{
-						Fields: specField.Fields,
+					if err := dataUpdate(&TypeSpec{
+						Fields: fieldSpec.Fields,
 					}, dstField, value.GetStructValue()); err != nil {
 						return err
 					}
 				} else if dstField.Kind() == reflect.Struct {
-					if err := dataUpdate(&Spec{
-						Fields: specField.Fields,
+					if err := dataUpdate(&TypeSpec{
+						Fields: fieldSpec.Fields,
 					}, dstField, value.GetStructValue()); err != nil {
 						return err
 					}

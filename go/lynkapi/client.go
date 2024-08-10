@@ -39,6 +39,9 @@ var (
 type Client interface {
 	ApiList(req *ApiListRequest) *ApiListResponse
 	Exec(req *Request) *Response
+	DataProject(req *DataProjectRequest) *DataProjectResponse
+	DataQuery(req *DataQuery) *DataResult
+	DataUpsert(req *DataUpsert) *DataResult
 }
 
 type ClientConfig struct {
@@ -57,11 +60,17 @@ type clientImpl struct {
 
 func (it *ClientConfig) NewClient() (*clientImpl, error) {
 
-	if it.AccessKey == nil {
-		return nil, errors.New("access key not setup")
-	}
+	// if it.AccessKey == nil {
+	// 	return nil, errors.New("access key not setup")
+	// }
 
-	ak := fmt.Sprintf("%s.%s", it.Addr, it.AccessKey.Id)
+	var ak string
+
+	if it.AccessKey == nil {
+		ak = it.Addr
+	} else {
+		ak = fmt.Sprintf("%s.%s", it.Addr, it.AccessKey.Id)
+	}
 
 	dbMut.Lock()
 	defer dbMut.Unlock()
@@ -160,17 +169,67 @@ func (it *clientImpl) DataProject(req *DataProjectRequest) *DataProjectResponse 
 	return rs
 }
 
+func (it *clientImpl) DataQuery(req *DataQuery) *DataResult {
+
+	ctx, fc := context.WithTimeout(context.Background(), it.cfg.timeout())
+	defer fc()
+
+	rs, err := it.ac.DataQuery(ctx, req)
+	if err != nil {
+		if status, ok := status.FromError(err); ok && len(status.Message()) > 5 {
+			return &DataResult{
+				Status: ParseError(errors.New(status.Message())),
+			}
+		}
+		return &DataResult{
+			Status: ParseError(err),
+		}
+	}
+	if rs.Status == nil {
+		rs.Status = NewServiceStatusOK()
+	}
+	return rs
+}
+
+func (it *clientImpl) DataUpsert(req *DataUpsert) *DataResult {
+
+	ctx, fc := context.WithTimeout(context.Background(), it.cfg.timeout())
+	defer fc()
+
+	rs, err := it.ac.DataUpsert(ctx, req)
+	if err != nil {
+		if status, ok := status.FromError(err); ok && len(status.Message()) > 5 {
+			return &DataResult{
+				Status: ParseError(errors.New(status.Message())),
+			}
+		}
+		return &DataResult{
+			Status: ParseError(err),
+		}
+	}
+	if rs.Status == nil {
+		rs.Status = NewServiceStatusOK()
+	}
+	return rs
+}
+
 func rpcClientConnect(
 	addr string,
 	key *hauth.AccessKey,
 	forceNew bool,
 ) (*grpc.ClientConn, error) {
 
-	if key == nil {
-		return nil, errors.New("not auth key setup")
-	}
+	// if key == nil {
+	// 	return nil, errors.New("not auth key setup")
+	// }
 
-	ck := fmt.Sprintf("%s.%s", addr, key.Id)
+	var ck string
+
+	if key != nil {
+		ck = fmt.Sprintf("%s.%s", addr, key.Id)
+	} else {
+		ck = addr
+	}
 
 	rpcClientMu.Lock()
 	defer rpcClientMu.Unlock()
@@ -186,10 +245,13 @@ func rpcClientConnect(
 	}
 
 	dialOptions := []grpc.DialOption{
-		grpc.WithPerRPCCredentials(newAppCredential(key)),
 		grpc.WithMaxMsgSize(grpcMsgByteMax * 2),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(grpcMsgByteMax * 2)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(grpcMsgByteMax * 2)),
+	}
+
+	if key != nil {
+		dialOptions = append(dialOptions, grpc.WithPerRPCCredentials(newAppCredential(key)))
 	}
 
 	dialOptions = append(dialOptions, grpc.WithInsecure())

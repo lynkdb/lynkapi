@@ -29,12 +29,13 @@ func Test_DataMerge(t *testing.T) {
 	}
 
 	type Obj struct {
-		Name       string    `json:"name" toml:"name"`
-		Int        int64     `json:"int" toml:"int" lynkapi_value_limits:"10,20,30"`
-		Obj1       Obj1      `json:"obj1" toml:"obj1"`
-		Obj2       *Obj1     `json:"obj2" toml:"obj2"`
-		Array      []string  `json:"array" toml:"array"`
-		ArrayFloat []float64 `json:"array_float" toml:"array_float"`
+		Name       string            `json:"name" toml:"name"`
+		Int        int64             `json:"int" toml:"int" lynkapi_value_limits:"10,20,30"`
+		Obj1       Obj1              `json:"obj1" toml:"obj1"`
+		Obj2       *Obj1             `json:"obj2" toml:"obj2"`
+		Array      []string          `json:"array" toml:"array"`
+		ArrayFloat []float64         `json:"array_float" toml:"array_float"`
+		Map        map[string]string `json:"map" toml:"map" yaml:"map"`
 	}
 
 	spec, _, err := lynkapi.NewSpecFromStruct(Obj{})
@@ -58,6 +59,9 @@ func Test_DataMerge(t *testing.T) {
 		},
 		Obj2: &Obj1{
 			Name: "test2",
+		},
+		Map: map[string]string{
+			"key": "value",
 		},
 	}
 

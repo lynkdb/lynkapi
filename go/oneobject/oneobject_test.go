@@ -34,7 +34,7 @@ func Test_Instance(t *testing.T) {
 		},
 	}
 
-	inst, err := oneobject.NewInstance(cfg)
+	inst, err := oneobject.NewInstance("test", cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -34,6 +34,10 @@ func NewNotFoundError(msg string) error {
 	return NewError(StatusCode_NotFound, msg)
 }
 
+func NewTimeoutError(msg string) error {
+	return NewError(StatusCode_Timeout, msg)
+}
+
 func NewConflictError(msg string) error {
 	return NewError(StatusCode_Conflict, msg)
 }
@@ -77,6 +81,13 @@ func (it *ServiceStatus) Err() error {
 		return errors.New("#" + it.Code + " " + it.Message)
 	}
 	return nil
+}
+
+func NewServiceStatus(code, msg string) *ServiceStatus {
+	return &ServiceStatus{
+		Code:    code,
+		Message: msg,
+	}
 }
 
 func NewServiceStatusOK() *ServiceStatus {

@@ -26,6 +26,7 @@ const (
 	StatusCode_BadRequest = "4000"
 	StatusCode_UnAuth     = "4010"
 	StatusCode_NotFound   = "4040"
+	StatusCode_Timeout    = "4080"
 	StatusCode_Conflict   = "4090"
 	StatusCode_RateLimit  = "4290"
 
@@ -49,4 +50,10 @@ const RequestSpecNameInContext = "lynkdb.lynkapi.Context.RequestSpec"
 var (
 	// name identifier
 	NameIdentifier = regexp.MustCompile("^[a-zA-Z][a-zA-Z0-9_]{0,63}$")
+
+	// length range [2, 16]
+	NamespaceIdentifier = regexp.MustCompile("^[a-z][a-z0-9]{1,15}$")
+
+	//
+	ObjectIdentifier = regexp.MustCompile("^[0-9a-f]{4,32}$")
 )

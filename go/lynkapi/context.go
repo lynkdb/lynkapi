@@ -20,14 +20,14 @@ import (
 
 type Context interface {
 	context.Context
-	RequestSpec() *Spec
+	RequestSpec() *TypeSpec
 }
 
 type xContext struct {
 	context.Context
-	spec *Spec
+	spec *TypeSpec
 }
 
-func (it *xContext) RequestSpec() *Spec {
+func (it *xContext) RequestSpec() *TypeSpec {
 	return it.spec
 }

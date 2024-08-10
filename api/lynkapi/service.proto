@@ -25,15 +25,10 @@ import "google/protobuf/struct.proto";
 import "lynkapi/type.proto";
 import "lynkapi/data.proto";
 
-message ServiceStatus {
-  string code = 1;
-  string message = 2;
-}
-
 message ServiceMethod {
   string name = 1;
-  Spec request_spec = 4;
-  Spec response_spec = 6;
+  TypeSpec request_spec = 4;
+  TypeSpec response_spec = 6;
 }
 
 message ServiceInstance {
@@ -45,7 +40,7 @@ message ApiListRequest {}
 
 message ApiListResponse {
   string kind = 1;
-  ServiceStatus status = 2;
+  lynkapi.ServiceStatus status = 2;
   repeated ServiceInstance services = 3;  // `x_attrs:"rows"`
 }
 
@@ -53,7 +48,7 @@ message DataProjectRequest {}
 
 message DataProjectResponse {
   string kind = 1;
-  ServiceStatus status = 2;
+  lynkapi.ServiceStatus status = 2;
   repeated DataInstance instances = 3;  // `x_attrs:"rows"`
 }
 
@@ -65,7 +60,7 @@ message Request {
 
 message Response {
   string kind = 1;
-  ServiceStatus status = 2;
+  lynkapi.ServiceStatus status = 2;
   google.protobuf.Struct data = 8;
 }
 
@@ -74,4 +69,6 @@ service LynkService {
   rpc Exec(Request) returns (Response) {}
   rpc DataProject(DataProjectRequest) returns (DataProjectResponse) {}
   rpc DataQuery(lynkapi.DataQuery) returns (lynkapi.DataResult) {}
+  rpc DataUpsert(lynkapi.DataUpsert) returns (lynkapi.DataResult) {}
+  rpc DataIgsert(lynkapi.DataIgsert) returns (lynkapi.DataResult) {}
 }

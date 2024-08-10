@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 
@@ -14,18 +15,21 @@ import (
 )
 
 type Instance struct {
-	mu     sync.Mutex
-	name   string
-	spec   *lynkapi.Spec
-	object any
-	tables map[string]*table
+	mu      sync.Mutex
+	name    string
+	spec    *lynkapi.TypeSpec
+	object  any
+	tables  map[string]*table
+	flusher Flusher
 }
+
+type Flusher func() error
 
 type table struct {
 	path  []string
 	name  string
 	spec  *lynkapi.TableSpec
-	field *lynkapi.SpecField
+	field *lynkapi.FieldSpec
 }
 
 func (it *Instance) Instance() *lynkapi.DataInstance {
@@ -75,17 +79,29 @@ func findValue(path []string, upValue reflect.Value) (reflect.Value, error) {
 	return fieldValue, errors.New("data not found (!slice)")
 }
 
-func NewInstance(name string, obj any) (*Instance, error) {
+func NewInstance(name string, obj any, args ...any) (*Instance, error) {
 	spec, _, err := lynkapi.NewSpecFromStruct(obj)
 	if err != nil {
 		return nil, err
 	}
-	return &Instance{
+	inst := &Instance{
 		name:   name,
 		spec:   spec,
 		object: obj,
 		tables: map[string]*table{},
-	}, nil
+	}
+
+	for _, arg := range args {
+		if arg == nil {
+			continue
+		}
+		switch arg.(type) {
+		case Flusher:
+			inst.flusher = arg.(Flusher)
+			fmt.Println("setup flusher")
+		}
+	}
+	return inst, nil
 }
 
 func (it *Instance) Query(q *lynkapi.DataQuery) (*lynkapi.DataResult, error) {
@@ -103,7 +119,7 @@ func (it *Instance) Query(q *lynkapi.DataQuery) (*lynkapi.DataResult, error) {
 		return nil, err
 	}
 
-	indexFields := map[string]*lynkapi.SpecField{}
+	indexFields := map[string]*lynkapi.FieldSpec{}
 	for _, fd := range tbl.field.Fields {
 		indexFields[fd.TagName] = fd
 	}
@@ -119,15 +135,44 @@ func (it *Instance) Query(q *lynkapi.DataQuery) (*lynkapi.DataResult, error) {
 		filters = map[string]*structpb.Value{}
 	)
 
+	if len(q.Sort) > 0 {
+
+	}
+
+	orderDef := int32(0)
+	sortFilter := func(row *lynkapi.DataRow) *lynkapi.DataRow {
+		// TODO
+		if len(q.Sort) > 0 {
+			if v, ok := row.Fields[q.Sort[0].Field]; ok && v.GetNumberValue() > 0 {
+				row.InterOrder = int32(v.GetNumberValue())
+			} else {
+				orderDef += 1
+				row.InterOrder = row.InterOrder
+			}
+		}
+		return row
+	}
+
 	if q.Filter != nil {
-		for _, fr := range q.Filter.Inner {
-			tp, ok := indexFields[lowerName(fr.Name)]
+		if len(q.Filter.Field) > 0 {
+			tp, ok := indexFields[lowerName(q.Filter.Field)]
 			if !ok {
 				return nil, errors.New("filter/field not found")
 			}
 			switch tp.Type {
-			case lynkapi.SpecField_String:
-				filters[tp.Name] = fr.Value
+			case lynkapi.FieldSpec_String:
+				filters[tp.Name] = q.Filter.Value
+			}
+		} else if len(q.Filter.Inner) > 0 {
+			for _, fr := range q.Filter.Inner {
+				tp, ok := indexFields[lowerName(fr.Field)]
+				if !ok {
+					return nil, errors.New("filter/field not found")
+				}
+				switch tp.Type {
+				case lynkapi.FieldSpec_String:
+					filters[tp.Name] = fr.Value
+				}
 			}
 		}
 	}
@@ -170,15 +215,187 @@ func (it *Instance) Query(q *lynkapi.DataQuery) (*lynkapi.DataResult, error) {
 		if err != nil {
 			continue
 		}
-		rs.Rows = append(rs.Rows, &lynkapi.TableSpec_Row{
+
+		row := &lynkapi.DataRow{
+			Id:     tbl.spec.PrimaryId(fieldValues),
 			Fields: fieldValues,
-		})
+		}
+
+		row = sortFilter(row)
+
+		rs.Rows = append(rs.Rows, row)
+	}
+
+	if len(q.Sort) > 0 {
+		if q.Sort[0].Type == "desc" {
+			sort.Slice(rs.Rows, func(i, j int) bool {
+				return rs.Rows[i].InterOrder > rs.Rows[j].InterOrder
+			})
+		} else {
+			sort.Slice(rs.Rows, func(i, j int) bool {
+				return rs.Rows[i].InterOrder < rs.Rows[j].InterOrder
+			})
+		}
+	}
+
+	if len(rs.Rows) == 0 {
+		rs.Status = lynkapi.NewServiceStatus(lynkapi.StatusCode_NotFound, "")
+	} else {
+		rs.Status = lynkapi.NewServiceStatusOK()
 	}
 
 	return rs, nil
 }
 
 func (it *Instance) Upsert(q *lynkapi.DataUpsert) (*lynkapi.DataResult, error) {
+
+	if len(q.Fields) == 0 || len(q.Fields) != len(q.Values) {
+		return nil, errors.New("invalid request (fields != values)")
+	}
+
+	{
+		js, _ := json.Marshal(q)
+		fmt.Println("req", string(js))
+	}
+
+	it.mu.Lock()
+	defer it.mu.Unlock()
+
+	tbl, ok := it.tables[q.TableName]
+	if !ok {
+		return nil, errors.New("table not found")
+	}
+
+	vtbl, err := findValue(tbl.path, reflect.ValueOf(it.object))
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		idx         = map[string]int{}
+		pks, pkm, _ = tbl.field.PrimaryKeys()
+		data        = map[string]*structpb.Value{}
+	)
+	for i, tagName := range q.Fields {
+		data[tagName] = q.Values[i]
+		specField, ok := pkm[tagName]
+		if !ok {
+			continue
+		}
+		switch specField.Type {
+		case "string":
+			if s := strings.TrimSpace(q.Values[i].String()); s == "" {
+				if fn := specField.FuncAttr("rand_hex", "object_id"); fn != nil {
+					q.Values[i] = structpb.NewStringValue(fn.GenId())
+				} else {
+					return nil, errors.New("primary-key not be null")
+				}
+			}
+			idx[specField.TagName] = i
+		default:
+			return nil, errors.New("un-impl")
+		}
+	}
+
+	if len(idx) < len(pks) {
+
+		for _, specField := range pkm {
+
+			if _, ok := idx[specField.TagName]; ok {
+				continue
+			}
+
+			if _, ok := data[specField.TagName]; ok {
+				continue
+			}
+
+			fa := specField.FuncAttr("rand_hex", "object_id")
+			if fa == nil {
+				continue
+			}
+
+			value := structpb.NewStringValue(fa.GenId())
+
+			data[specField.TagName] = value
+			idx[specField.TagName] = len(q.Values)
+			q.Values = append(q.Values, value)
+			q.Fields = append(q.Fields, specField.TagName)
+		}
+	}
+
+	if len(idx) != len(pks) {
+		return nil, errors.New("primary-key not found")
+	}
+
+	tp := vtbl.Type().Elem()
+	if tp.Kind() == reflect.Pointer {
+		tp = tp.Elem()
+	}
+
+	reqData := reflect.New(tp)
+
+	js, _ := json.Marshal(data)
+	if err := json.Unmarshal(js, reqData.Interface()); err != nil {
+		return nil, err
+	}
+
+	rs := &lynkapi.DataResult{}
+
+	for i := 0; i < vtbl.Len(); i++ {
+		vrow := vtbl.Index(i)
+		if vrow.Kind() == reflect.Pointer {
+			vrow = vrow.Elem()
+		}
+		if !vrow.IsValid() || vrow.Kind() != reflect.Struct {
+			continue
+		}
+		pkhit := 0
+		for _, pk := range pkm {
+			fv := vrow.FieldByName(pk.Name)
+			if !fv.IsValid() {
+				continue
+			}
+			switch pk.Type {
+			case "string":
+				if fv.String() == q.Values[idx[pk.TagName]].GetStringValue() {
+					pkhit += 1
+				}
+			}
+		}
+		if pkhit != len(pks) {
+			continue
+		}
+
+		if _, err := tbl.field.DataMerge(vtbl.Index(i).Interface(), reqData.Interface()); err != nil {
+			return nil, err
+		}
+
+		if it.flusher != nil {
+			if err := it.flusher(); err != nil {
+				return nil, err
+			}
+		}
+
+		return rs, nil
+	}
+
+	dst := reflect.New(tp)
+	_, err = tbl.field.DataMerge(dst.Interface(), reqData.Interface())
+	if err != nil {
+		return nil, err
+	}
+	vtbl.Set(reflect.Append(vtbl, dst))
+
+	if it.flusher != nil {
+		if err := it.flusher(); err != nil {
+			return nil, err
+		}
+	}
+
+	return rs, nil
+}
+
+func (it *Instance) Igsert(q *lynkapi.DataIgsert) (*lynkapi.DataResult, error) {
 
 	if len(q.Fields) == 0 || len(q.Fields) != len(q.Values) {
 		return nil, errors.New("invalid request (fields != values)")
@@ -198,27 +415,70 @@ func (it *Instance) Upsert(q *lynkapi.DataUpsert) (*lynkapi.DataResult, error) {
 	}
 
 	var (
-		idx       = map[string]int{}
-		pks, pkms = tbl.field.PrimaryKeys()
-		data      = map[string]*structpb.Value{}
+		pks, pkm, ukm = tbl.field.PrimaryKeys()
+		data          = map[string]*structpb.Value{}
+		pkv           = map[string]*structpb.Value{} // primary-key
+		ukv           = map[string]*structpb.Value{} // unique-key
 	)
-	for i, fieldName := range q.Fields {
-		data[fieldName] = q.Values[i]
-		specField, ok := pkms[fieldName]
+
+	for i, tagName := range q.Fields {
+
+		data[tagName] = q.Values[i]
+
+		//
+		specField, ok := ukm[tagName]
 		if !ok {
 			continue
 		}
-		switch specField.Type {
-		case "string":
+
+		switch {
+		case specField.Type == "string":
 			if s := strings.TrimSpace(q.Values[i].String()); s == "" {
-				return nil, errors.New("primary-key not be null")
+				if fn := specField.FuncAttr("rand_hex", "object_id"); fn != nil {
+					q.Values[i] = structpb.NewStringValue(fn.GenId())
+				} else {
+					return nil, errors.New("primary-key/unique-key not be null")
+				}
 			}
-			idx[specField.TagName] = i
+			ukv[specField.TagName] = q.Values[i]
+			if _, ok = pkm[tagName]; ok {
+				pkv[specField.TagName] = q.Values[i]
+			}
+
 		default:
 			return nil, errors.New("un-impl")
 		}
 	}
-	if len(idx) != len(pks) {
+
+	if len(pkv) < len(pks) {
+
+		for _, specField := range pkm {
+
+			if _, ok := pkv[specField.TagName]; ok {
+				continue
+			}
+			if _, ok := data[specField.TagName]; ok {
+				continue
+			}
+
+			fa := specField.FuncAttr("rand_hex", "object_id")
+			if fa == nil {
+				continue
+			}
+
+			value := structpb.NewStringValue(fa.GenId())
+
+			data[specField.TagName] = value
+
+			pkv[specField.TagName] = value
+			ukv[specField.TagName] = value
+
+			q.Values = append(q.Values, value)
+			q.Fields = append(q.Fields, specField.TagName)
+		}
+	}
+
+	if len(pkv) != len(pks) {
 		return nil, errors.New("primary-key not found")
 	}
 
@@ -244,28 +504,19 @@ func (it *Instance) Upsert(q *lynkapi.DataUpsert) (*lynkapi.DataResult, error) {
 		if !v.IsValid() || v.Kind() != reflect.Struct {
 			continue
 		}
-		pkhit := 0
-		for _, pk := range pkms {
-			fv := v.FieldByName(pk.Name)
+		ukhit := 0
+		for _, fd := range ukm {
+			fv := v.FieldByName(fd.Name)
 			if !fv.IsValid() {
 				continue
 			}
-			switch pk.Type {
-			case "string":
-				if fv.String() == q.Values[idx[pk.TagName]].GetStringValue() {
-					pkhit += 1
-				}
+			if uv, ok := ukv[fd.TagName]; ok && uv.GetStringValue() == fv.String() {
+				ukhit += 1
 			}
 		}
-		if pkhit != len(pks) {
-			continue
+		if ukhit > 0 {
+			return rs, nil
 		}
-
-		if _, err := tbl.field.DataMerge(hit.Index(i).Interface(), reqData.Interface()); err != nil {
-			return nil, err
-		}
-
-		return rs, nil
 	}
 
 	dst := reflect.New(tp)
@@ -298,14 +549,14 @@ func (it *Instance) Delete(q *lynkapi.DataDelete) (*lynkapi.DataResult, error) {
 	}
 
 	var (
-		idx       = map[string]*structpb.Value{}
-		pks, pkms = tbl.field.PrimaryKeys()
+		idx         = map[string]*structpb.Value{}
+		pks, pkm, _ = tbl.field.PrimaryKeys()
 	)
 	for _, fr := range q.Filter.Inner {
 		if fr.Value == nil {
 			continue
 		}
-		specField, ok := pkms[fr.Name]
+		specField, ok := pkm[fr.Field]
 		if !ok {
 			continue
 		}
@@ -335,7 +586,7 @@ func (it *Instance) Delete(q *lynkapi.DataDelete) (*lynkapi.DataResult, error) {
 			continue
 		}
 		pkhit := 0
-		for _, pk := range pkms {
+		for _, pk := range pkm {
 			fv := v.FieldByName(pk.Name)
 			if !fv.IsValid() {
 				continue
@@ -370,7 +621,7 @@ func (it *Instance) TableSetup(path string) error {
 
 	var (
 		fields = strings.Split(strings.TrimSpace(path), "__")
-		find   func(fields, hitPath []string, specField *lynkapi.SpecField) (*lynkapi.SpecField, []string, error)
+		find   func(fields, hitPath []string, specField *lynkapi.FieldSpec) (*lynkapi.FieldSpec, []string, error)
 	)
 
 	for i, fd := range fields {
@@ -386,7 +637,7 @@ func (it *Instance) TableSetup(path string) error {
 		return nil
 	}
 
-	find = func(fields, hitPath []string, specField *lynkapi.SpecField) (*lynkapi.SpecField, []string, error) {
+	find = func(fields, hitPath []string, specField *lynkapi.FieldSpec) (*lynkapi.FieldSpec, []string, error) {
 		if len(fields) > 0 {
 			for _, field := range specField.Fields {
 				if field.TagName != fields[0] {
@@ -401,7 +652,7 @@ func (it *Instance) TableSetup(path string) error {
 				if field.Type != "array:struct" {
 					break
 				}
-				pkeys, _ := field.PrimaryKeys()
+				pkeys, _, _ := field.PrimaryKeys()
 				if len(pkeys) == 0 {
 					return nil, nil, errors.New("primary-key not setup")
 				}
@@ -411,7 +662,7 @@ func (it *Instance) TableSetup(path string) error {
 		return nil, nil, errors.New("no table spec-field found")
 	}
 
-	hitField, hitPath, err := find(fields, []string{}, &lynkapi.SpecField{
+	hitField, hitPath, err := find(fields, []string{}, &lynkapi.FieldSpec{
 		Fields: it.spec.Fields,
 	})
 	if err != nil {
@@ -422,6 +673,7 @@ func (it *Instance) TableSetup(path string) error {
 		path: hitPath,
 		spec: &lynkapi.TableSpec{
 			Name:   tableName,
+			Kind:   hitField.Kind,
 			Fields: hitField.Fields,
 		},
 		field: hitField,

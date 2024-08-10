@@ -9,17 +9,52 @@ import "google/protobuf/struct.proto";
 
 import "lynkapi/type.proto";
 
+// base data struct
+
+message DataDict {
+  // id
+  string id = 3;   // `x_attrs:"primary_key,rand_hex(8)"`
+  string pid = 4;  // parent-id
+
+  // metadata
+  string ns = 1;         // `x_attrs:"namespace_identifier"`
+  string name = 5;       // `x_attrs:"unique_key"`
+  string ref_table = 8;  // `x_attrs:""`
+
+  // information
+  string display_name = 6;
+  string description = 7;
+
+  //
+  repeated string attrs = 13;
+
+  // time
+  // int64 created = 14;
+  // int64 updated = 15;
+
+  map<string, google.protobuf.Value> ext_fields = 17;
+
+  // style
+  int32 order = 32;  // `x_range:"0,4,9"`
+  // uint64 version = 33;
+}
+
+message DataRow {
+  string id = 1;
+  repeated google.protobuf.Value values = 9;
+  // field.tag_name = any-value
+  map<string, google.protobuf.Value> fields = 10;
+
+  // ex ...
+  int32 inter_order = 32;
+}
+
 // database
 
 message TableSpec {
-  message Row {
-    string id = 1;
-    repeated google.protobuf.Value values = 9;
-    map<string, google.protobuf.Value> fields = 10;
-  }
-
   string name = 1;  // `x_attrs:"name_identifier"`
-  repeated SpecField fields = 9;
+  string kind = 2;
+  repeated FieldSpec fields = 9;
   repeated string primary_fields = 10;
   repeated string index_fields = 11;
 
@@ -27,7 +62,7 @@ message TableSpec {
   string prefix = 14;
 
   map<string, string> options = 15;
-  repeated Row demo_rows = 16;
+  repeated DataRow demo_rows = 16;
 }
 
 message DataSpec {
@@ -62,7 +97,7 @@ message DataProject {
 message DataQuery {
   message Filter {
     string type = 1;  // `x_enums:",and,or"`
-    string name = 2;
+    string field = 2;
     google.protobuf.Value value = 3;
     repeated Filter inner = 4;
   }
@@ -100,7 +135,15 @@ message DataUpsert {
   string table_name = 3;     // `x_attrs:"name_identifier"`
   repeated string fields = 5;
   repeated google.protobuf.Value values = 6;
-  DataQuery.Filter filter = 7;
+  // map<string, google.protobuf.Value> field_values = 7;
+  DataQuery.Filter filter = 9;
+}
+
+message DataIgsert {
+  string instance_name = 2;  // `x_attrs:"name_identifier"`
+  string table_name = 3;     // `x_attrs:"name_identifier"`
+  repeated string fields = 5;
+  repeated google.protobuf.Value values = 6;
 }
 
 message DataDelete {
@@ -111,14 +154,16 @@ message DataDelete {
 
 message DataResult {
   string kind = 1;
-  string name = 2;
+  lynkapi.ServiceStatus status = 2;
+  string name = 3;
 
-  TableSpec spec = 3;
-  repeated TableSpec.Row rows = 9;  // `x_attrs:"rows"`
+  TableSpec spec = 4;
+  repeated DataRow rows = 9;  // `x_attrs:"rows"`
 }
 
 message DataResults {
   string kind = 1;
+  lynkapi.ServiceStatus status = 2;
 
   repeated DataResult results = 9;
 }

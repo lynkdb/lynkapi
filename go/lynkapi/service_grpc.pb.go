@@ -37,6 +37,8 @@ const (
 	LynkService_Exec_FullMethodName        = "/lynkapi.LynkService/Exec"
 	LynkService_DataProject_FullMethodName = "/lynkapi.LynkService/DataProject"
 	LynkService_DataQuery_FullMethodName   = "/lynkapi.LynkService/DataQuery"
+	LynkService_DataUpsert_FullMethodName  = "/lynkapi.LynkService/DataUpsert"
+	LynkService_DataIgsert_FullMethodName  = "/lynkapi.LynkService/DataIgsert"
 )
 
 // LynkServiceClient is the client API for LynkService service.
@@ -47,6 +49,8 @@ type LynkServiceClient interface {
 	Exec(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	DataProject(ctx context.Context, in *DataProjectRequest, opts ...grpc.CallOption) (*DataProjectResponse, error)
 	DataQuery(ctx context.Context, in *DataQuery, opts ...grpc.CallOption) (*DataResult, error)
+	DataUpsert(ctx context.Context, in *DataUpsert, opts ...grpc.CallOption) (*DataResult, error)
+	DataIgsert(ctx context.Context, in *DataIgsert, opts ...grpc.CallOption) (*DataResult, error)
 }
 
 type lynkServiceClient struct {
@@ -93,6 +97,24 @@ func (c *lynkServiceClient) DataQuery(ctx context.Context, in *DataQuery, opts .
 	return out, nil
 }
 
+func (c *lynkServiceClient) DataUpsert(ctx context.Context, in *DataUpsert, opts ...grpc.CallOption) (*DataResult, error) {
+	out := new(DataResult)
+	err := c.cc.Invoke(ctx, LynkService_DataUpsert_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *lynkServiceClient) DataIgsert(ctx context.Context, in *DataIgsert, opts ...grpc.CallOption) (*DataResult, error) {
+	out := new(DataResult)
+	err := c.cc.Invoke(ctx, LynkService_DataIgsert_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LynkServiceServer is the server API for LynkService service.
 // All implementations must embed UnimplementedLynkServiceServer
 // for forward compatibility
@@ -101,6 +123,8 @@ type LynkServiceServer interface {
 	Exec(context.Context, *Request) (*Response, error)
 	DataProject(context.Context, *DataProjectRequest) (*DataProjectResponse, error)
 	DataQuery(context.Context, *DataQuery) (*DataResult, error)
+	DataUpsert(context.Context, *DataUpsert) (*DataResult, error)
+	DataIgsert(context.Context, *DataIgsert) (*DataResult, error)
 	mustEmbedUnimplementedLynkServiceServer()
 }
 
@@ -119,6 +143,12 @@ func (UnimplementedLynkServiceServer) DataProject(context.Context, *DataProjectR
 }
 func (UnimplementedLynkServiceServer) DataQuery(context.Context, *DataQuery) (*DataResult, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DataQuery not implemented")
+}
+func (UnimplementedLynkServiceServer) DataUpsert(context.Context, *DataUpsert) (*DataResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DataUpsert not implemented")
+}
+func (UnimplementedLynkServiceServer) DataIgsert(context.Context, *DataIgsert) (*DataResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DataIgsert not implemented")
 }
 func (UnimplementedLynkServiceServer) mustEmbedUnimplementedLynkServiceServer() {}
 
@@ -205,6 +235,42 @@ func _LynkService_DataQuery_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LynkService_DataUpsert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DataUpsert)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LynkServiceServer).DataUpsert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LynkService_DataUpsert_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LynkServiceServer).DataUpsert(ctx, req.(*DataUpsert))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LynkService_DataIgsert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DataIgsert)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LynkServiceServer).DataIgsert(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LynkService_DataIgsert_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LynkServiceServer).DataIgsert(ctx, req.(*DataIgsert))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LynkService_ServiceDesc is the grpc.ServiceDesc for LynkService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -227,6 +293,14 @@ var LynkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DataQuery",
 			Handler:    _LynkService_DataQuery_Handler,
+		},
+		{
+			MethodName: "DataUpsert",
+			Handler:    _LynkService_DataUpsert_Handler,
+		},
+		{
+			MethodName: "DataIgsert",
+			Handler:    _LynkService_DataIgsert_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

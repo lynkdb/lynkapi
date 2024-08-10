@@ -27,6 +27,9 @@ type DataService interface {
 	Instance() *DataInstance
 
 	Query(q *DataQuery) (*DataResult, error)
+	Upsert(q *DataUpsert) (*DataResult, error)
+	Igsert(q *DataIgsert) (*DataResult, error)
+	Delete(q *DataDelete) (*DataResult, error)
 }
 
 type dataProjectManager struct {
@@ -111,6 +114,10 @@ func (it *DataUpsert) SetField(name string, obj any) {
 	switch obj.(type) {
 	case string:
 		value = structpb.NewStringValue(obj.(string))
+	case map[string]interface{}:
+		if st, err := structpb.NewStruct(obj.(map[string]interface{})); err == nil {
+			value = structpb.NewStructValue(st)
+		}
 	}
 	if value == nil {
 		return
@@ -125,11 +132,35 @@ func (it *DataUpsert) SetField(name string, obj any) {
 	it.Values = append(it.Values, value)
 }
 
-func (it *DataQuery_Filter) And(name string, obj any) *DataQuery_Filter {
+func (it *DataIgsert) SetField(name string, obj any) {
+	var value *structpb.Value
+	switch obj.(type) {
+	case string:
+		value = structpb.NewStringValue(obj.(string))
+
+	case map[string]interface{}:
+		if st, err := structpb.NewStruct(obj.(map[string]interface{})); err == nil {
+			value = structpb.NewStructValue(st)
+		}
+	}
+	if value == nil {
+		return
+	}
+	for i, field := range it.Fields {
+		if field == name {
+			it.Values[i] = value
+			return
+		}
+	}
+	it.Fields = append(it.Fields, name)
+	it.Values = append(it.Values, value)
+}
+
+func (it *DataQuery_Filter) And(field string, obj any) *DataQuery_Filter {
 	if obj != nil {
 		if v, err := structpb.NewValue(obj); err == nil {
 			it.Inner = append(it.Inner, &DataQuery_Filter{
-				Name:  name,
+				Field: field,
 				Value: v,
 			})
 		}

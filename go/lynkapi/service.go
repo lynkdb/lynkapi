@@ -72,7 +72,7 @@ func NewService() *LynkService {
 	}
 }
 
-func refTypeKind(rt reflect.Type) string {
+func RefTypeKind(rt reflect.Type) string {
 	pkgPath := rt.PkgPath()
 	if pkgPath != "" {
 		pkgPath += "."
@@ -104,7 +104,7 @@ func (it *LynkService) RegisterService(st interface{}) error {
 	if !ok {
 		srv = &serviceInstance{
 			instance: &ServiceInstance{
-				// Kind: refTypeKind(rt.Elem()),
+				// Kind: RefTypeKind(rt.Elem()),
 				Name: srvName,
 			},
 			mapMethods:      map[string]*ServiceMethod{},
@@ -365,13 +365,45 @@ func (it *LynkService) DataQuery(
 	ctx context.Context,
 	req *DataQuery,
 ) (*DataResult, error) {
-
+	hlog.Printf("info", "data-query %s", jsonEncode(req))
 	ds := it.dataProject.service(req.InstanceName)
 	if ds == nil {
 		return nil, NewNotFoundError("instance not found")
 	}
-
 	return ds.Query(req)
+}
+
+func (it *LynkService) DataUpsert(
+	ctx context.Context,
+	req *DataUpsert,
+) (*DataResult, error) {
+	ds := it.dataProject.service(req.InstanceName)
+	if ds == nil {
+		return nil, NewNotFoundError("instance not found")
+	}
+	return ds.Upsert(req)
+}
+
+func (it *LynkService) DataIgsert(
+	ctx context.Context,
+	req *DataIgsert,
+) (*DataResult, error) {
+	ds := it.dataProject.service(req.InstanceName)
+	if ds == nil {
+		return nil, NewNotFoundError("instance not found")
+	}
+	return ds.Igsert(req)
+}
+
+func (it *LynkService) DataDelete(
+	ctx context.Context,
+	req *DataDelete,
+) (*DataResult, error) {
+	ds := it.dataProject.service(req.InstanceName)
+	if ds == nil {
+		return nil, NewNotFoundError("instance not found")
+	}
+	return ds.Delete(req)
 }
 
 func (c LynkService) ApiListAction() {

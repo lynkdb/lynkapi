@@ -129,7 +129,13 @@ func cfgSetup() error {
 
 	var err error
 	for _, cfgFile := range cfgFiles {
-		if err = htoml.DecodeFromFile(cfgFile, &cfg); err == nil {
+		if err = htoml.DecodeFromFile(cfgFile, &cfg); err == nil && len(cfg.Services) > 0 {
+			cfile = cfgFile
+			break
+		}
+		var cfgService lynkapi.ClientConfig
+		if err = htoml.DecodeFromFile(cfgFile, &cfgService); err == nil && cfgService.Addr != "" {
+			cfg.Services = append(cfg.Services, &cfgService)
 			cfile = cfgFile
 			break
 		}

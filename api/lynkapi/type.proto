@@ -26,7 +26,7 @@ import "google/protobuf/struct.proto";
 //   string attrs = 70000;
 // }
 
-message SpecField {
+message FieldSpec {
   // unique name
   string name = 1;  // `x_attrs:"primary_key,name_identifier"`
 
@@ -49,7 +49,7 @@ message SpecField {
   map<string, google.protobuf.Value> opts = 8;
 
   //
-  repeated SpecField fields = 9;
+  repeated FieldSpec fields = 9;
 
   // description
   string desc = 10;
@@ -58,9 +58,14 @@ message SpecField {
   // float(32,64) repeated int32 decimal_size = 12;  // [precision, scale]
 }
 
-message Spec {
+message TypeSpec {
   string kind = 1;
   string name = 2;  // `x_attrs:"name_identifier"`
 
-  repeated SpecField fields = 9;
+  repeated FieldSpec fields = 9;
+}
+
+message ServiceStatus {
+  string code = 1;
+  string message = 2;
 }
