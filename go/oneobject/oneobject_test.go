@@ -18,6 +18,43 @@ type ConfigObject struct {
 	Options []*ConfigItem `json:"options"`
 }
 
+func Test_Field_UniqueKey(t *testing.T) {
+	type Container struct {
+		Table []*lynkapi.DataDict `json:"table" x_attrs:"rows"`
+	}
+
+	ctn := &Container{
+		Table: []*lynkapi.DataDict{
+			{
+				Name: "unikey-1",
+			},
+		},
+	}
+
+	inst, err := oneobject.NewInstance("test", ctn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := inst.TableSetup("table"); err != nil {
+		t.Fatal(err)
+	}
+
+	insert := &lynkapi.DataInsert{
+		InstanceName: "test",
+		TableName:    "table",
+	}
+	insert.SetField("name", "unikey-1")
+
+	if _, err := inst.Insert(insert); err != nil {
+		if ss := lynkapi.ParseError(err); ss.Code != lynkapi.StatusCode_Conflict {
+			t.Fatal(err)
+		}
+	} else {
+		t.Fatal("unique-key")
+	}
+}
+
 func Test_Instance(t *testing.T) {
 
 	cfg := &ConfigObject{
@@ -64,7 +101,7 @@ func Test_Instance(t *testing.T) {
 	}
 
 	{ // insert
-		upsert := &lynkapi.DataUpsert{
+		upsert := &lynkapi.DataInsert{
 			TableName: "options",
 		}
 		upsert.SetField("name", "name-3")
@@ -95,7 +132,7 @@ func Test_Instance(t *testing.T) {
 	}
 
 	{ // update
-		upsert := &lynkapi.DataUpsert{
+		upsert := &lynkapi.DataInsert{
 			TableName: "options",
 		}
 		upsert.SetField("name", "name-3")

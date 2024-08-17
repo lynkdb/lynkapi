@@ -27,8 +27,8 @@ type DataService interface {
 	Instance() *DataInstance
 
 	Query(q *DataQuery) (*DataResult, error)
-	Upsert(q *DataUpsert) (*DataResult, error)
-	Igsert(q *DataIgsert) (*DataResult, error)
+	Upsert(q *DataInsert) (*DataResult, error)
+	Igsert(q *DataInsert) (*DataResult, error)
 	Delete(q *DataDelete) (*DataResult, error)
 }
 
@@ -109,30 +109,19 @@ func (it *DataInstance) SetName(name string) *DataInstance {
 	return it
 }
 
-func (it *DataUpsert) SetField(name string, obj any) {
-	var value *structpb.Value
-	switch obj.(type) {
-	case string:
-		value = structpb.NewStringValue(obj.(string))
-	case map[string]interface{}:
-		if st, err := structpb.NewStruct(obj.(map[string]interface{})); err == nil {
-			value = structpb.NewStructValue(st)
+func (it *DataInstance) TableSpec(name string) *TableSpec {
+	if it.Spec == nil || !NameIdentifier.MatchString(name) {
+		return nil
+	}
+	for _, t := range it.Spec.Tables {
+		if t.Name == name {
+			return t
 		}
 	}
-	if value == nil {
-		return
-	}
-	for i, field := range it.Fields {
-		if field == name {
-			it.Values[i] = value
-			return
-		}
-	}
-	it.Fields = append(it.Fields, name)
-	it.Values = append(it.Values, value)
+	return nil
 }
 
-func (it *DataIgsert) SetField(name string, obj any) {
+func (it *DataInsert) SetField(name string, obj any) {
 	var value *structpb.Value
 	switch obj.(type) {
 	case string:

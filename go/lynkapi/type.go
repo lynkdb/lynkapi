@@ -39,6 +39,7 @@ const (
 
 	// todo
 	FieldSpec_StringTerm = "string_term"
+	FieldSpec_StringText = "string_text"
 
 	fieldSpec_Any        = "any"
 	fieldSpec_AnyTypeUri = "google.golang.org/protobuf/types/known/structpb.Value"
@@ -47,6 +48,7 @@ const (
 var fieldSpecAttrs = map[string]int{
 	"primary_key": 1,
 	"unique_key":  1,
+	"unique_keys": 2,
 
 	"string_text": 1,
 

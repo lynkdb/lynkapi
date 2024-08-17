@@ -375,7 +375,7 @@ func (it *LynkService) DataQuery(
 
 func (it *LynkService) DataUpsert(
 	ctx context.Context,
-	req *DataUpsert,
+	req *DataInsert,
 ) (*DataResult, error) {
 	ds := it.dataProject.service(req.InstanceName)
 	if ds == nil {
@@ -386,7 +386,7 @@ func (it *LynkService) DataUpsert(
 
 func (it *LynkService) DataIgsert(
 	ctx context.Context,
-	req *DataIgsert,
+	req *DataInsert,
 ) (*DataResult, error) {
 	ds := it.dataProject.service(req.InstanceName)
 	if ds == nil {

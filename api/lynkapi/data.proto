@@ -66,7 +66,8 @@ message TableSpec {
 }
 
 message DataSpec {
-  string driver = 1;  // `x_attrs:"name_identifier"`
+  string driver = 2;  // `x_attrs:"name_identifier"`
+  string type = 3;    // `x_enums:"table,kv,oneobject"`
   repeated TableSpec tables = 9;
 }
 
@@ -127,23 +128,7 @@ message DataUpdate {
   string table_name = 3;     // `x_attrs:"name_identifier"`
   repeated string fields = 5;
   repeated google.protobuf.Value values = 6;
-  DataQuery.Filter filter = 7;
-}
-
-message DataUpsert {
-  string instance_name = 2;  // `x_attrs:"name_identifier"`
-  string table_name = 3;     // `x_attrs:"name_identifier"`
-  repeated string fields = 5;
-  repeated google.protobuf.Value values = 6;
-  // map<string, google.protobuf.Value> field_values = 7;
   DataQuery.Filter filter = 9;
-}
-
-message DataIgsert {
-  string instance_name = 2;  // `x_attrs:"name_identifier"`
-  string table_name = 3;     // `x_attrs:"name_identifier"`
-  repeated string fields = 5;
-  repeated google.protobuf.Value values = 6;
 }
 
 message DataDelete {

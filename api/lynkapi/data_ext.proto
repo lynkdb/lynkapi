@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package lynkapi;
+
+option optimize_for = LITE_RUNTIME;
+option go_package = "github.com/lynkdb/lynkapi/go/lynkapi;lynkapi";
+
+// import "google/protobuf/struct.proto";
+
+// import "lynkapi/type.proto";
+// import "lynkapi/data.proto";
+
+message DataExt {}

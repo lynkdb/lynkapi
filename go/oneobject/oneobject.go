@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -17,6 +19,7 @@ import (
 type Instance struct {
 	mu      sync.Mutex
 	name    string
+	file    string
 	spec    *lynkapi.TypeSpec
 	object  any
 	tables  map[string]*table
@@ -79,6 +82,33 @@ func findValue(path []string, upValue reflect.Value) (reflect.Value, error) {
 	return fieldValue, errors.New("data not found (!slice)")
 }
 
+func NewInstanceFromFile(name, file string, obj any, args ...any) (*Instance, error) {
+
+	b, err := ioutil.ReadFile(file)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	if err == nil {
+		if err = json.Unmarshal(b, obj); err != nil {
+			return nil, err
+		}
+	}
+
+	inst, err := NewInstance(name, obj, args...)
+	if err != nil {
+		return nil, err
+	}
+	inst.file = file
+
+	inst.flusher = func() error {
+		b, _ := json.MarshalIndent(inst.object, "", "  ")
+		return ioutil.WriteFile(inst.file, b, 0640)
+	}
+
+	return inst, nil
+}
+
 func NewInstance(name string, obj any, args ...any) (*Instance, error) {
 	spec, _, err := lynkapi.NewSpecFromStruct(obj)
 	if err != nil {
@@ -98,7 +128,6 @@ func NewInstance(name string, obj any, args ...any) (*Instance, error) {
 		switch arg.(type) {
 		case Flusher:
 			inst.flusher = arg.(Flusher)
-			fmt.Println("setup flusher")
 		}
 	}
 	return inst, nil
@@ -247,15 +276,10 @@ func (it *Instance) Query(q *lynkapi.DataQuery) (*lynkapi.DataResult, error) {
 	return rs, nil
 }
 
-func (it *Instance) Upsert(q *lynkapi.DataUpsert) (*lynkapi.DataResult, error) {
+func (it *Instance) Upsert(q *lynkapi.DataInsert) (*lynkapi.DataResult, error) {
 
 	if len(q.Fields) == 0 || len(q.Fields) != len(q.Values) {
 		return nil, errors.New("invalid request (fields != values)")
-	}
-
-	{
-		js, _ := json.Marshal(q)
-		fmt.Println("req", string(js))
 	}
 
 	it.mu.Lock()
@@ -370,10 +394,8 @@ func (it *Instance) Upsert(q *lynkapi.DataUpsert) (*lynkapi.DataResult, error) {
 			return nil, err
 		}
 
-		if it.flusher != nil {
-			if err := it.flusher(); err != nil {
-				return nil, err
-			}
+		if err := it.Flush(); err != nil {
+			return nil, err
 		}
 
 		return rs, nil
@@ -386,16 +408,28 @@ func (it *Instance) Upsert(q *lynkapi.DataUpsert) (*lynkapi.DataResult, error) {
 	}
 	vtbl.Set(reflect.Append(vtbl, dst))
 
-	if it.flusher != nil {
-		if err := it.flusher(); err != nil {
-			return nil, err
-		}
+	if err := it.Flush(); err != nil {
+		return nil, err
 	}
 
 	return rs, nil
 }
 
-func (it *Instance) Igsert(q *lynkapi.DataIgsert) (*lynkapi.DataResult, error) {
+const (
+	kInsertRaw int = iota + 1
+	kInsertIgsert
+	kInsertUpsert
+)
+
+func (it *Instance) Insert(q *lynkapi.DataInsert) (*lynkapi.DataResult, error) {
+	return it.insert(q, kInsertRaw)
+}
+
+func (it *Instance) Igsert(q *lynkapi.DataInsert) (*lynkapi.DataResult, error) {
+	return it.insert(q, kInsertIgsert)
+}
+
+func (it *Instance) insert(q *lynkapi.DataInsert, typ int) (*lynkapi.DataResult, error) {
 
 	if len(q.Fields) == 0 || len(q.Fields) != len(q.Values) {
 		return nil, errors.New("invalid request (fields != values)")
@@ -497,16 +531,16 @@ func (it *Instance) Igsert(q *lynkapi.DataIgsert) (*lynkapi.DataResult, error) {
 	rs := &lynkapi.DataResult{}
 
 	for i := 0; i < hit.Len(); i++ {
-		v := hit.Index(i)
-		if v.Kind() == reflect.Pointer {
-			v = v.Elem()
+		row := hit.Index(i)
+		if row.Kind() == reflect.Pointer {
+			row = row.Elem()
 		}
-		if !v.IsValid() || v.Kind() != reflect.Struct {
+		if !row.IsValid() || row.Kind() != reflect.Struct {
 			continue
 		}
 		ukhit := 0
 		for _, fd := range ukm {
-			fv := v.FieldByName(fd.Name)
+			fv := row.FieldByName(fd.Name)
 			if !fv.IsValid() {
 				continue
 			}
@@ -514,9 +548,16 @@ func (it *Instance) Igsert(q *lynkapi.DataIgsert) (*lynkapi.DataResult, error) {
 				ukhit += 1
 			}
 		}
-		if ukhit > 0 {
-			return rs, nil
+
+		if ukhit == 0 {
+			continue
 		}
+
+		if typ == kInsertRaw {
+			return rs, lynkapi.NewConflictError("row exist")
+		}
+
+		return rs, nil
 	}
 
 	dst := reflect.New(tp)
@@ -525,6 +566,10 @@ func (it *Instance) Igsert(q *lynkapi.DataIgsert) (*lynkapi.DataResult, error) {
 		return nil, err
 	}
 	hit.Set(reflect.Append(hit, dst))
+
+	if err := it.Flush(); err != nil {
+		return nil, err
+	}
 
 	return rs, nil
 }
@@ -611,6 +656,10 @@ func (it *Instance) Delete(q *lynkapi.DataDelete) (*lynkapi.DataResult, error) {
 		}
 		hit.Set(ls)
 
+		if err := it.Flush(); err != nil {
+			return nil, err
+		}
+
 		return rs, nil
 	}
 
@@ -677,6 +726,13 @@ func (it *Instance) TableSetup(path string) error {
 			Fields: hitField.Fields,
 		},
 		field: hitField,
+	}
+	return nil
+}
+
+func (it *Instance) Flush() error {
+	if it.flusher != nil {
+		return it.flusher()
 	}
 	return nil
 }

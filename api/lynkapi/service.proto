@@ -69,6 +69,6 @@ service LynkService {
   rpc Exec(Request) returns (Response) {}
   rpc DataProject(DataProjectRequest) returns (DataProjectResponse) {}
   rpc DataQuery(lynkapi.DataQuery) returns (lynkapi.DataResult) {}
-  rpc DataUpsert(lynkapi.DataUpsert) returns (lynkapi.DataResult) {}
-  rpc DataIgsert(lynkapi.DataIgsert) returns (lynkapi.DataResult) {}
+  rpc DataUpsert(lynkapi.DataInsert) returns (lynkapi.DataResult) {}
+  rpc DataIgsert(lynkapi.DataInsert) returns (lynkapi.DataResult) {}
 }

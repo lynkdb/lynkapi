@@ -41,7 +41,7 @@ type Client interface {
 	Exec(req *Request) *Response
 	DataProject(req *DataProjectRequest) *DataProjectResponse
 	DataQuery(req *DataQuery) *DataResult
-	DataUpsert(req *DataUpsert) *DataResult
+	DataUpsert(req *DataInsert) *DataResult
 }
 
 type ClientConfig struct {
@@ -191,7 +191,7 @@ func (it *clientImpl) DataQuery(req *DataQuery) *DataResult {
 	return rs
 }
 
-func (it *clientImpl) DataUpsert(req *DataUpsert) *DataResult {
+func (it *clientImpl) DataUpsert(req *DataInsert) *DataResult {
 
 	ctx, fc := context.WithTimeout(context.Background(), it.cfg.timeout())
 	defer fc()
