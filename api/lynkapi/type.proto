@@ -22,6 +22,13 @@ option go_package = "github.com/lynkdb/lynkapi/go/lynkapi;lynkapi";
 // import "google/protobuf/descriptor.proto";
 import "google/protobuf/struct.proto";
 
+message TypeSpec {
+  string kind = 1;
+  string name = 2;  // `x_attrs:"name_identifier"`
+
+  repeated FieldSpec fields = 9;
+}
+
 // extend google.protobuf.FieldOptions {
 //   string attrs = 70000;
 // }
@@ -46,23 +53,22 @@ message FieldSpec {
   repeated string enums = 7;
 
   //
-  map<string, google.protobuf.Value> opts = 8;
+  repeated string dict_ns = 8;
 
   //
-  repeated FieldSpec fields = 9;
+  map<string, google.protobuf.Value> styles = 9;
+
+  //
+  map<string, google.protobuf.Value> opts = 11;
 
   // description
-  string desc = 10;
+  string desc = 12;
 
   // int32 bytes_length = 11;  // int(8,16,32,64), uint(8,16,32,64),
   // float(32,64) repeated int32 decimal_size = 12;  // [precision, scale]
-}
 
-message TypeSpec {
-  string kind = 1;
-  string name = 2;  // `x_attrs:"name_identifier"`
-
-  repeated FieldSpec fields = 9;
+  //
+  repeated FieldSpec fields = 16;
 }
 
 message ServiceStatus {

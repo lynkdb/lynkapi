@@ -3,23 +3,25 @@ module github.com/lynkdb/lynkapi
 go 1.22.3
 
 require (
+	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/chzyer/readline v1.5.1
 	github.com/hooto/hauth v0.1.2
 	github.com/hooto/hlog4g v0.9.4
 	github.com/hooto/htoml4g v0.9.5
-	github.com/hooto/httpsrv v0.12.4
+	github.com/hooto/httpsrv v0.12.5
 	github.com/olekukonko/tablewriter v0.0.5
-	google.golang.org/grpc v1.63.2
-	google.golang.org/protobuf v1.34.1
+	github.com/tidwall/pretty v1.2.1
+	google.golang.org/grpc v1.67.1
+	google.golang.org/protobuf v1.35.1
 )
 
 require (
-	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/hooto/hflag4g v0.10.0 // indirect
-	github.com/mattn/go-runewidth v0.0.15 // indirect
+	github.com/andybalholm/brotli v1.1.1 // indirect
+	github.com/hooto/hflag4g v0.10.1 // indirect
+	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	golang.org/x/net v0.28.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240325203815-454cdb8f5daa // indirect
+	golang.org/x/net v0.30.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241021214115-324edc3d5d38 // indirect
 )

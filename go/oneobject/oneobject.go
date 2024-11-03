@@ -1,9 +1,7 @@
 package oneobject
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -13,6 +11,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/structpb"
 
+	"github.com/lynkdb/lynkapi/go/codec"
 	"github.com/lynkdb/lynkapi/go/lynkapi"
 )
 
@@ -90,7 +89,7 @@ func NewInstanceFromFile(name, file string, obj any, args ...any) (*Instance, er
 	}
 
 	if err == nil {
-		if err = json.Unmarshal(b, obj); err != nil {
+		if err = codec.Json.Decode(b, obj); err != nil {
 			return nil, err
 		}
 	}
@@ -102,7 +101,9 @@ func NewInstanceFromFile(name, file string, obj any, args ...any) (*Instance, er
 	inst.file = file
 
 	inst.flusher = func() error {
-		b, _ := json.MarshalIndent(inst.object, "", "  ")
+		b, _ := codec.Json.Encode(inst.object, &codec.JsonOptions{
+			Width: 120,
+		})
 		return ioutil.WriteFile(inst.file, b, 0640)
 	}
 
@@ -164,16 +165,12 @@ func (it *Instance) Query(q *lynkapi.DataQuery) (*lynkapi.DataResult, error) {
 		filters = map[string]*structpb.Value{}
 	)
 
-	if len(q.Sort) > 0 {
-
-	}
-
 	orderDef := int32(0)
 	sortFilter := func(row *lynkapi.DataRow) *lynkapi.DataRow {
 		// TODO
-		if len(q.Sort) > 0 {
-			if v, ok := row.Fields[q.Sort[0].Field]; ok && v.GetNumberValue() > 0 {
-				row.InterOrder = int32(v.GetNumberValue())
+		if q.Sort != nil && q.Sort.Field != "" {
+			if v, ok := row.Fields[q.Sort.Field]; ok && v.GetNumberValue() > 0 {
+				row.InterOrder = int64(v.GetNumberValue())
 			} else {
 				orderDef += 1
 				row.InterOrder = row.InterOrder
@@ -255,8 +252,8 @@ func (it *Instance) Query(q *lynkapi.DataQuery) (*lynkapi.DataResult, error) {
 		rs.Rows = append(rs.Rows, row)
 	}
 
-	if len(q.Sort) > 0 {
-		if q.Sort[0].Type == "desc" {
+	if q.Sort != nil {
+		if q.Sort.Type == "desc" {
 			sort.Slice(rs.Rows, func(i, j int) bool {
 				return rs.Rows[i].InterOrder > rs.Rows[j].InterOrder
 			})
@@ -276,145 +273,6 @@ func (it *Instance) Query(q *lynkapi.DataQuery) (*lynkapi.DataResult, error) {
 	return rs, nil
 }
 
-func (it *Instance) Upsert(q *lynkapi.DataInsert) (*lynkapi.DataResult, error) {
-
-	if len(q.Fields) == 0 || len(q.Fields) != len(q.Values) {
-		return nil, errors.New("invalid request (fields != values)")
-	}
-
-	it.mu.Lock()
-	defer it.mu.Unlock()
-
-	tbl, ok := it.tables[q.TableName]
-	if !ok {
-		return nil, errors.New("table not found")
-	}
-
-	vtbl, err := findValue(tbl.path, reflect.ValueOf(it.object))
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		idx         = map[string]int{}
-		pks, pkm, _ = tbl.field.PrimaryKeys()
-		data        = map[string]*structpb.Value{}
-	)
-	for i, tagName := range q.Fields {
-		data[tagName] = q.Values[i]
-		specField, ok := pkm[tagName]
-		if !ok {
-			continue
-		}
-		switch specField.Type {
-		case "string":
-			if s := strings.TrimSpace(q.Values[i].String()); s == "" {
-				if fn := specField.FuncAttr("rand_hex", "object_id"); fn != nil {
-					q.Values[i] = structpb.NewStringValue(fn.GenId())
-				} else {
-					return nil, errors.New("primary-key not be null")
-				}
-			}
-			idx[specField.TagName] = i
-		default:
-			return nil, errors.New("un-impl")
-		}
-	}
-
-	if len(idx) < len(pks) {
-
-		for _, specField := range pkm {
-
-			if _, ok := idx[specField.TagName]; ok {
-				continue
-			}
-
-			if _, ok := data[specField.TagName]; ok {
-				continue
-			}
-
-			fa := specField.FuncAttr("rand_hex", "object_id")
-			if fa == nil {
-				continue
-			}
-
-			value := structpb.NewStringValue(fa.GenId())
-
-			data[specField.TagName] = value
-			idx[specField.TagName] = len(q.Values)
-			q.Values = append(q.Values, value)
-			q.Fields = append(q.Fields, specField.TagName)
-		}
-	}
-
-	if len(idx) != len(pks) {
-		return nil, errors.New("primary-key not found")
-	}
-
-	tp := vtbl.Type().Elem()
-	if tp.Kind() == reflect.Pointer {
-		tp = tp.Elem()
-	}
-
-	reqData := reflect.New(tp)
-
-	js, _ := json.Marshal(data)
-	if err := json.Unmarshal(js, reqData.Interface()); err != nil {
-		return nil, err
-	}
-
-	rs := &lynkapi.DataResult{}
-
-	for i := 0; i < vtbl.Len(); i++ {
-		vrow := vtbl.Index(i)
-		if vrow.Kind() == reflect.Pointer {
-			vrow = vrow.Elem()
-		}
-		if !vrow.IsValid() || vrow.Kind() != reflect.Struct {
-			continue
-		}
-		pkhit := 0
-		for _, pk := range pkm {
-			fv := vrow.FieldByName(pk.Name)
-			if !fv.IsValid() {
-				continue
-			}
-			switch pk.Type {
-			case "string":
-				if fv.String() == q.Values[idx[pk.TagName]].GetStringValue() {
-					pkhit += 1
-				}
-			}
-		}
-		if pkhit != len(pks) {
-			continue
-		}
-
-		if _, err := tbl.field.DataMerge(vtbl.Index(i).Interface(), reqData.Interface()); err != nil {
-			return nil, err
-		}
-
-		if err := it.Flush(); err != nil {
-			return nil, err
-		}
-
-		return rs, nil
-	}
-
-	dst := reflect.New(tp)
-	_, err = tbl.field.DataMerge(dst.Interface(), reqData.Interface())
-	if err != nil {
-		return nil, err
-	}
-	vtbl.Set(reflect.Append(vtbl, dst))
-
-	if err := it.Flush(); err != nil {
-		return nil, err
-	}
-
-	return rs, nil
-}
-
 const (
 	kInsertRaw int = iota + 1
 	kInsertIgsert
@@ -427,6 +285,10 @@ func (it *Instance) Insert(q *lynkapi.DataInsert) (*lynkapi.DataResult, error) {
 
 func (it *Instance) Igsert(q *lynkapi.DataInsert) (*lynkapi.DataResult, error) {
 	return it.insert(q, kInsertIgsert)
+}
+
+func (it *Instance) Upsert(q *lynkapi.DataInsert) (*lynkapi.DataResult, error) {
+	return it.insert(q, kInsertUpsert)
 }
 
 func (it *Instance) insert(q *lynkapi.DataInsert, typ int) (*lynkapi.DataResult, error) {
@@ -443,7 +305,7 @@ func (it *Instance) insert(q *lynkapi.DataInsert, typ int) (*lynkapi.DataResult,
 		return nil, errors.New("table not found")
 	}
 
-	hit, err := findValue(tbl.path, reflect.ValueOf(it.object))
+	vtbl, err := findValue(tbl.path, reflect.ValueOf(it.object))
 	if err != nil {
 		return nil, err
 	}
@@ -516,22 +378,22 @@ func (it *Instance) insert(q *lynkapi.DataInsert, typ int) (*lynkapi.DataResult,
 		return nil, errors.New("primary-key not found")
 	}
 
-	tp := hit.Type().Elem()
+	tp := vtbl.Type().Elem()
 	if tp.Kind() == reflect.Pointer {
 		tp = tp.Elem()
 	}
 
 	reqData := reflect.New(tp)
 
-	js, _ := json.Marshal(data)
-	if err := json.Unmarshal(js, reqData.Interface()); err != nil {
+	js, _ := codec.Json.Encode(data)
+	if err := codec.Json.Decode(js, reqData.Interface()); err != nil {
 		return nil, err
 	}
 
 	rs := &lynkapi.DataResult{}
 
-	for i := 0; i < hit.Len(); i++ {
-		row := hit.Index(i)
+	for i := 0; i < vtbl.Len(); i++ {
+		row := vtbl.Index(i)
 		if row.Kind() == reflect.Pointer {
 			row = row.Elem()
 		}
@@ -553,10 +415,21 @@ func (it *Instance) insert(q *lynkapi.DataInsert, typ int) (*lynkapi.DataResult,
 			continue
 		}
 
-		if typ == kInsertRaw {
+		switch typ {
+		case kInsertRaw:
 			return rs, lynkapi.NewConflictError("row exist")
+
+		case kInsertUpsert:
+			if _, err := tbl.field.DataMerge(vtbl.Index(i).Interface(), reqData.Interface()); err != nil {
+				return nil, err
+			}
+
+			if err := it.Flush(); err != nil {
+				return nil, err
+			}
 		}
 
+		rs.Status = lynkapi.NewServiceStatusOK()
 		return rs, nil
 	}
 
@@ -565,12 +438,13 @@ func (it *Instance) insert(q *lynkapi.DataInsert, typ int) (*lynkapi.DataResult,
 	if err != nil {
 		return nil, err
 	}
-	hit.Set(reflect.Append(hit, dst))
+	vtbl.Set(reflect.Append(vtbl, dst))
 
 	if err := it.Flush(); err != nil {
 		return nil, err
 	}
 
+	rs.Status = lynkapi.NewServiceStatusOK()
 	return rs, nil
 }
 
@@ -584,7 +458,7 @@ func (it *Instance) Delete(q *lynkapi.DataDelete) (*lynkapi.DataResult, error) {
 		return nil, errors.New("table not found")
 	}
 
-	hit, err := findValue(tbl.path, reflect.ValueOf(it.object))
+	vtbl, err := findValue(tbl.path, reflect.ValueOf(it.object))
 	if err != nil {
 		return nil, err
 	}
@@ -622,8 +496,8 @@ func (it *Instance) Delete(q *lynkapi.DataDelete) (*lynkapi.DataResult, error) {
 
 	rs := &lynkapi.DataResult{}
 
-	for i := 0; i < hit.Len(); i++ {
-		v := hit.Index(i)
+	for i := 0; i < vtbl.Len(); i++ {
+		v := vtbl.Index(i)
 		if v.Kind() == reflect.Pointer {
 			v = v.Elem()
 		}
@@ -647,22 +521,23 @@ func (it *Instance) Delete(q *lynkapi.DataDelete) (*lynkapi.DataResult, error) {
 			continue
 		}
 
-		ls := reflect.New(hit.Type()).Elem()
+		ls := reflect.New(vtbl.Type()).Elem()
 		for j := 0; j < i; j++ {
-			ls.Set(reflect.Append(ls, hit.Index(j)))
+			ls.Set(reflect.Append(ls, vtbl.Index(j)))
 		}
-		for j := i + 1; j < hit.Len(); j++ {
-			ls.Set(reflect.Append(ls, hit.Index(j)))
+		for j := i + 1; j < vtbl.Len(); j++ {
+			ls.Set(reflect.Append(ls, vtbl.Index(j)))
 		}
-		hit.Set(ls)
+		vtbl.Set(ls)
 
 		if err := it.Flush(); err != nil {
 			return nil, err
 		}
 
-		return rs, nil
+		break
 	}
 
+	rs.Status = lynkapi.NewServiceStatusOK()
 	return rs, nil
 }
 
@@ -753,9 +628,4 @@ func lowerName(s string) string {
 		}
 	}
 	return string(b2)
-}
-
-func jsonPrint(name string, o any) {
-	js, _ := json.Marshal(o)
-	fmt.Println(name, string(js))
 }

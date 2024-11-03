@@ -62,8 +62,47 @@ var fieldSpecAttrs = map[string]int{
 	"object_id": 2,
 }
 
+type fieldSpecStyleParser func(v string) (*structpb.Value, bool)
+
+var fieldSpecStyles = map[string]fieldSpecStyleParser{
+	"textarea_rows": func(v string) (*structpb.Value, bool) {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 100 {
+			return structpb.NewNumberValue(float64(n)), true
+		}
+		return nil, false
+	},
+	"text_type": func(v string) (*structpb.Value, bool) {
+		switch v {
+		case "html", "md":
+			return structpb.NewStringValue(v), true
+		}
+		return nil, false
+	},
+	"list_max_len": func(v string) (*structpb.Value, bool) {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= (1<<20) {
+			return structpb.NewNumberValue(float64(n)), true
+		}
+		return nil, false
+	},
+	"list_width": func(v string) (*structpb.Value, bool) {
+		if strings.HasPrefix(v, "cw-") {
+			if n, err := strconv.Atoi(v[3:]); err == nil && n >= 1 && n <= 24 {
+				return structpb.NewStringValue(v), true
+			}
+		}
+		return nil, false
+	},
+	"unit": func(v string) (*structpb.Value, bool) {
+		switch v {
+		case "unix-seconds", "unix-microseconds", "unix-milliseconds":
+			return structpb.NewStringValue(v), true
+		}
+		return nil, false
+	},
+}
+
 // var (
-// 	FieldSpec_FuncAttrMatcher = regexp.MustCompile("^rand_hex\\(([0-9]+)\\)$")
+//	FieldSpec_FuncAttrMatcher = regexp.MustCompile("^rand_hex\\(([0-9]+)\\)$")
 // )
 
 type FieldSpec_FuncAttr struct {
@@ -119,7 +158,7 @@ func (it *TypeSpec) Rows(data *structpb.Struct) (*FieldSpec, *structpb.ListValue
 	return nil, nil
 }
 
-func (it *TypeSpec) DataMerge(dstObject, srcObject interface{}, opts ...interface{}) (bool, error) {
+func (it *TypeSpec) DataMerge(dstObject, srcObject any, opts ...any) (bool, error) {
 	return specDataMerge(it, dstObject, srcObject, opts...)
 }
 
@@ -240,13 +279,13 @@ func (it *TableSpec) PrimaryId(fields map[string]*structpb.Value) string {
 	return ""
 }
 
-func (it *FieldSpec) DataMerge(dstObject, srcObject interface{}, opts ...interface{}) (bool, error) {
+func (it *FieldSpec) DataMerge(dstObject, srcObject any, opts ...any) (bool, error) {
 	return specDataMerge(&TypeSpec{
 		Fields: it.Fields,
 	}, dstObject, srcObject, opts...)
 }
 
-func (it *SpecSet) Register(o interface{}) error {
+func (it *SpecSet) Register(o any) error {
 	spec, rtype, err := NewSpecFromStruct(o)
 	if err != nil {
 		return err
@@ -269,7 +308,7 @@ func (it *SpecSet) Register(o interface{}) error {
 	return nil
 }
 
-func RegisterSpec(o interface{}) error {
+func RegisterSpec(o any) error {
 	return specSet.Register(o)
 }
 
@@ -282,7 +321,7 @@ func (it *SpecSet) Get(kind string) *RegSpec {
 	return nil
 }
 
-func NewSpecFromStruct(obj interface{}) (*TypeSpec, reflect.Type, error) {
+func NewSpecFromStruct(obj any) (*TypeSpec, reflect.Type, error) {
 
 	if obj == nil {
 		return nil, nil, fmt.Errorf("empty object")
@@ -446,6 +485,7 @@ func parseSpecByStructType(rt reflect.Type) (*TypeSpec, reflect.Type, error) {
 
 			case reflect.String:
 				field.Type = FieldSpec_String
+
 				if es := fd.Tag.Get("x_enums"); es != "" {
 					ar := strings.Split(es, ",")
 					m := map[string]bool{}
@@ -453,6 +493,16 @@ func parseSpecByStructType(rt reflect.Type) (*TypeSpec, reflect.Type, error) {
 						if _, ok := m[v]; !ok {
 							field.Enums = append(field.Enums, v)
 							m[v] = true
+						}
+					}
+				}
+
+				if dn := fd.Tag.Get("x_dict_ns"); dn != "" {
+					ar := strings.Split(dn, ",")
+					for _, v := range ar {
+						if NamespaceIdentifier.MatchString(v) &&
+							!slices.Contains(field.DictNs, v) {
+							field.DictNs = append(field.DictNs, v)
 						}
 					}
 				}
@@ -557,6 +607,26 @@ func parseSpecByStructType(rt reflect.Type) (*TypeSpec, reflect.Type, error) {
 					}
 				}
 			}
+
+			if fd.Tag.Get("x_styles") != "" {
+				arr := strings.Split(fd.Tag.Get("x_styles"), ";")
+				for _, v := range arr {
+					arr2 := strings.Split(v, "=")
+					if len(arr2) != 2 {
+						continue
+					}
+					pr, ok := fieldSpecStyles[arr2[0]]
+					if !ok || pr == nil {
+						continue
+					}
+					v2, ok := pr(arr2[1])
+					if !ok {
+						continue
+					}
+					field.SetStyle(arr2[0], v2)
+				}
+			}
+
 			pField.Fields = append(pField.Fields, field)
 		}
 	}
@@ -607,17 +677,17 @@ func parseSpecByStructType(rt reflect.Type) (*TypeSpec, reflect.Type, error) {
 }
 
 // func (it *FieldSpec) ReflectKindEqual(kind reflect.Kind) bool {
-// 	switch kind {
-// 	case reflect.Bool:
-// 		return it.Type == FieldSpec_Bool
+//	switch kind {
+//	case reflect.Bool:
+//		return it.Type == FieldSpec_Bool
 //
-// 	case reflect.String:
-// 		return it.Type == FieldSpec_String
-// 	}
-// 	return false
+//	case reflect.String:
+//		return it.Type == FieldSpec_String
+//	}
+//	return false
 // }
 
-func ParseStructValid(kind string, data *structpb.Struct) (interface{}, error) {
+func ParseStructValid(kind string, data *structpb.Struct) (any, error) {
 	spec := specSet.Get(kind)
 	if spec == nil {
 		return nil, fmt.Errorf("spec kind (%s) not found", kind)
@@ -629,6 +699,20 @@ func ParseStructValid(kind string, data *structpb.Struct) (interface{}, error) {
 		return nil, err
 	}
 	return obj, nil
+}
+
+func (it *FieldSpec) SetStyle(k string, v any) {
+	if v == nil {
+		return
+	}
+	if it.Styles == nil {
+		it.Styles = map[string]*structpb.Value{}
+	}
+	if v2, ok := v.(*structpb.Value); ok {
+		it.Styles[k] = v2
+	} else if v2, err := structpb.NewValue(v); err == nil {
+		it.Styles[k] = v2
+	}
 }
 
 func (it *FieldSpec_FuncAttr) GenId() string {

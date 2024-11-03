@@ -19,16 +19,19 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash/crc32"
 	"math/rand"
 	"time"
+
+	"github.com/cespare/xxhash/v2"
 )
 
-func jsonPrint(o interface{}) {
+func jsonPrint(o any) {
 	js, _ := json.MarshalIndent(o, "", "  ")
 	fmt.Println(string(js))
 }
 
-func jsonEncode(o interface{}) []byte {
+func jsonEncode(o any) []byte {
 	js, _ := json.MarshalIndent(o, "", "  ")
 	return js
 }
@@ -77,4 +80,32 @@ func RandBytes(size int) []byte {
 	}
 
 	return bs
+}
+
+func Uint32HexString(v uint32) string {
+	u := make([]byte, 4)
+	binary.BigEndian.PutUint32(u, v)
+	return hex.EncodeToString(u)
+}
+
+func Uint64HexString(v uint64) string {
+	u := make([]byte, 8)
+	binary.BigEndian.PutUint64(u, v)
+	return hex.EncodeToString(u)
+}
+
+func Crc32Hash(b []byte) uint32 {
+	return crc32.ChecksumIEEE(b)
+}
+
+func Crc32HashHexString(b []byte) string {
+	return Uint32HexString(Crc32Hash(b))
+}
+
+func XxHash(b []byte) uint64 {
+	return xxhash.Sum64(b)
+}
+
+func XxHashHexString(b []byte) string {
+	return Uint64HexString(XxHash(b))
 }

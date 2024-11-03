@@ -55,7 +55,7 @@ func resetPrompt(l *readline.Instance) {
 
 type SetupFunc func(cfg lynkapi.ClientConfig) error
 
-func Run(args ...interface{}) error {
+func Run(args ...any) error {
 
 	if err := cfgSetup(); err != nil {
 		return err

@@ -36,7 +36,8 @@ message DataDict {
 
   // style
   int32 order = 32;  // `x_range:"0,4,9"`
-  // uint64 version = 33;
+
+  uint64 version = 33;
 }
 
 message DataRow {
@@ -46,7 +47,21 @@ message DataRow {
   map<string, google.protobuf.Value> fields = 10;
 
   // ex ...
-  int32 inter_order = 32;
+  int64 inter_order = 32;
+}
+
+message DataCol {
+  // string field = 1;
+  // repeated google.protobuf.Value values = 3;
+
+  int64 base_int_value = 6;
+  repeated int64 int_values = 7;
+
+  repeated string string_values = 9;
+
+  repeated bytes bytes_values = 11;
+
+  repeated float float_values = 13;
 }
 
 // database
@@ -106,12 +121,13 @@ message DataQuery {
     string type = 1;  // `x_enums:",asc,desc"`
     string field = 2;
     string value = 3;
+    // TODO repeated SortFilter inner = 4;
   }
   string instance_name = 2;  // `x_attrs:"name_identifier"`
   string table_name = 3;     // `x_attrs:"name_identifier"`
   repeated string fields = 5;
   Filter filter = 6;
-  repeated SortFilter sort = 7;
+  SortFilter sort = 7;
   string offset = 8;
   int64 limit = 9;
 }
@@ -143,7 +159,14 @@ message DataResult {
   string name = 3;
 
   TableSpec spec = 4;
+
   repeated DataRow rows = 9;  // `x_attrs:"rows"`
+
+  repeated DataCol cols = 19;  // `x_attrs:"cols"`
+
+  repeated google.protobuf.Value objs = 20;
+
+  string next_offset = 10;
 }
 
 message DataResults {

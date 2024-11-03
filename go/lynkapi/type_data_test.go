@@ -98,8 +98,8 @@ func Test_DataUpdate(t *testing.T) {
 
 	base := &Obj{}
 
-	lv, _ := structpb.NewList([]interface{}{"a", "b"})
-	lf, _ := structpb.NewList([]interface{}{1.1, 2.2})
+	lv, _ := structpb.NewList([]any{"a", "b"})
+	lf, _ := structpb.NewList([]any{1.1, 2.2})
 
 	update := &structpb.Struct{
 		Fields: map[string]*structpb.Value{

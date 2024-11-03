@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func specDataMerge(spec *TypeSpec, dstObject, srcObject interface{}, opts ...interface{}) (bool, error) {
+func specDataMerge(spec *TypeSpec, dstObject, srcObject any, opts ...any) (bool, error) {
 
 	var (
 		chg        = false
@@ -466,7 +466,7 @@ func specDataMerge(spec *TypeSpec, dstObject, srcObject interface{}, opts ...int
 	return chg, err
 }
 
-func NewRequestFromObject(serviceName, methodName string, obj interface{}) (*Request, error) {
+func NewRequestFromObject(serviceName, methodName string, obj any) (*Request, error) {
 	js, err := json.Marshal(obj)
 	if err != nil {
 		return nil, err
@@ -500,7 +500,7 @@ func ConvertReflectValueToMapValue(value reflect.Value) (map[string]*structpb.Va
 	return fields, nil
 }
 
-func DecodeStruct(data *structpb.Struct, obj interface{}) error {
+func DecodeStruct(data *structpb.Struct, obj any) error {
 	js, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -508,7 +508,7 @@ func DecodeStruct(data *structpb.Struct, obj interface{}) error {
 	return json.Unmarshal(js, &obj)
 }
 
-func dataUpdate(spec *TypeSpec, baseObject interface{}, updateData *structpb.Struct) error {
+func dataUpdate(spec *TypeSpec, baseObject any, updateData *structpb.Struct) error {
 
 	var (
 		dataUpdate  func(spec *TypeSpec, baseValue reflect.Value, updateData *structpb.Struct) error

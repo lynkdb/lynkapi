@@ -80,7 +80,7 @@ func RefTypeKind(rt reflect.Type) string {
 	return fmt.Sprintf("%s%s", pkgPath, rt.Name())
 }
 
-func (it *LynkService) RegisterService(st interface{}) error {
+func (it *LynkService) RegisterService(st any) error {
 
 	if st == nil {
 		return errors.New("invalid object")
@@ -365,7 +365,7 @@ func (it *LynkService) DataQuery(
 	ctx context.Context,
 	req *DataQuery,
 ) (*DataResult, error) {
-	hlog.Printf("info", "data-query %s", jsonEncode(req))
+	// hlog.Printf("info", "data-query %s", jsonEncode(req))
 	ds := it.dataProject.service(req.InstanceName)
 	if ds == nil {
 		return nil, NewNotFoundError("instance not found")
@@ -426,7 +426,7 @@ func (it *Response) Err() error {
 	return NewError(StatusCode_InternalServerError, "unknown error")
 }
 
-func (it *Response) Decode(obj interface{}) error {
+func (it *Response) Decode(obj any) error {
 	js, err := json.Marshal(it.Data)
 	if err != nil {
 		return err

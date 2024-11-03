@@ -22,7 +22,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func ParseStruct(obj interface{}) *structpb.Struct {
+func ParseStruct(obj any) *structpb.Struct {
 
 	m := &structpb.Struct{
 		Fields: map[string]*structpb.Value{},

@@ -124,11 +124,20 @@ func (it *DataInstance) TableSpec(name string) *TableSpec {
 func (it *DataInsert) SetField(name string, obj any) {
 	var value *structpb.Value
 	switch obj.(type) {
+	case map[string]*structpb.Value:
+		value = &structpb.Value{
+			Kind: &structpb.Value_StructValue{
+				StructValue: &structpb.Struct{
+					Fields: obj.(map[string]*structpb.Value),
+				},
+			},
+		}
+
 	case string:
 		value = structpb.NewStringValue(obj.(string))
 
-	case map[string]interface{}:
-		if st, err := structpb.NewStruct(obj.(map[string]interface{})); err == nil {
+	case map[string]any:
+		if st, err := structpb.NewStruct(obj.(map[string]any)); err == nil {
 			value = structpb.NewStructValue(st)
 		}
 	}
@@ -145,6 +154,33 @@ func (it *DataInsert) SetField(name string, obj any) {
 	it.Values = append(it.Values, value)
 }
 
+func (it *DataQuery) AddFilter(field string, obj any) *DataQuery {
+
+	v, err := structpb.NewValue(obj)
+	if err != nil {
+		return it
+	}
+
+	fr := &DataQuery_Filter{
+		Field: field,
+		Value: v,
+	}
+
+	if it.Filter == nil {
+		it.Filter = fr
+	} else if it.Filter.Inner == nil {
+		it.Filter = &DataQuery_Filter{
+			Inner: []*DataQuery_Filter{
+				it.Filter,
+				fr,
+			},
+		}
+	} else {
+		it.Filter.Inner = append(it.Filter.Inner, fr)
+	}
+	return it
+}
+
 func (it *DataQuery_Filter) And(field string, obj any) *DataQuery_Filter {
 	if obj != nil {
 		if v, err := structpb.NewValue(obj); err == nil {
@@ -156,4 +192,15 @@ func (it *DataQuery_Filter) And(field string, obj any) *DataQuery_Filter {
 	}
 
 	return it
+}
+
+func (it *TableSpec) Field(tagName string) (*FieldSpec, int) {
+	if it != nil {
+		for i, field := range it.Fields {
+			if field.TagName == tagName {
+				return field, i
+			}
+		}
+	}
+	return nil, -1
 }

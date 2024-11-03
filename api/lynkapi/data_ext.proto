@@ -10,4 +10,10 @@ option go_package = "github.com/lynkdb/lynkapi/go/lynkapi;lynkapi";
 // import "lynkapi/type.proto";
 // import "lynkapi/data.proto";
 
-message DataExt {}
+message DataExt_BaseItem {
+  string id = 3;       // `x_attrs:"primary_key,object_id(12)"`
+  string pid = 4;      // parent-id
+  string user_id = 5;  //
+  string dict_id = 8;
+  string dict_ns = 9;
+}
