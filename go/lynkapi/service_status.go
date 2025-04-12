@@ -96,6 +96,20 @@ func NewServiceStatusOK() *ServiceStatus {
 	}
 }
 
+func NewServiceStatusClientError(msg string) *ServiceStatus {
+	return &ServiceStatus{
+		Code:    StatusCode_BadRequest,
+		Message: msg,
+	}
+}
+
+func NewServiceStatusServerError(msg string) *ServiceStatus {
+	return &ServiceStatus{
+		Code:    StatusCode_InternalServerError,
+		Message: msg,
+	}
+}
+
 func ParseError(err error) *ServiceStatus {
 	if err == nil {
 		return &ServiceStatus{

@@ -16,7 +16,6 @@ package lynkcli
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -26,6 +25,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	"github.com/lynkdb/lynkapi/go/codec"
 	"github.com/lynkdb/lynkapi/go/lynkapi"
 )
 
@@ -132,12 +132,12 @@ func (it *mgrService) help(fg FlagSet) string {
 		vals := []string{it.lowerName + " " + lowerName(method.Name)}
 
 		if fg.Has("show-request-spec") {
-			req, _ := json.MarshalIndent(method.RequestSpec, "", "  ")
+			req, _ := codec.Json.Encode(method.RequestSpec, &codec.JsonOptions{})
 			vals = append(vals, string(req))
 		}
 
 		if fg.Has("show-response-spec") {
-			rsp, _ := json.MarshalIndent(method.ResponseSpec, "", "  ")
+			rsp, _ := codec.Json.Encode(method.ResponseSpec, &codec.JsonOptions{})
 			vals = append(vals, string(rsp))
 		}
 
@@ -288,7 +288,7 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.TypeSpec) (string, error) {
 					fieldValues[idx] = fmt.Sprintf("%b", value.GetBoolValue())
 
 				default:
-					js, _ := json.MarshalIndent(value, "", "  ")
+					js, _ := codec.Json.Encode(value, &codec.JsonOptions{})
 					fieldValues[idx] = string(js)
 				}
 			}
@@ -344,7 +344,7 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.TypeSpec) (string, error) {
 				table.Append([]string{name, fmt.Sprintf("%b", value.GetBoolValue())})
 
 			default:
-				js, _ := json.MarshalIndent(value, "", "  ")
+				js, _ := codec.Json.Encode(value, &codec.JsonOptions{})
 				table.Append([]string{name, string(js)})
 			}
 		}

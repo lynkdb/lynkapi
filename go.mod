@@ -6,7 +6,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/chzyer/readline v1.5.1
 	github.com/hooto/hauth v0.1.2
-	github.com/hooto/hlog4g v0.9.4
+	github.com/hooto/hlog4g v0.9.5
 	github.com/hooto/htoml4g v0.9.5
 	github.com/hooto/httpsrv v0.12.5
 	github.com/olekukonko/tablewriter v0.0.5
