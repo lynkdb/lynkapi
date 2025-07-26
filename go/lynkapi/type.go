@@ -171,6 +171,23 @@ func (it *FieldSpec) Field(name string) *FieldSpec {
 	return nil
 }
 
+func (it *TypeSpec) TableSpec() *TableSpec {
+	ts := &TableSpec{
+		Kind:    it.Kind,
+		Name:    it.Name,
+		Fields:  it.Fields,
+		Options: map[string]string{},
+	}
+
+	for _, field := range it.Fields {
+		if slices.Contains(field.Attrs, "primary_key") {
+			ts.PrimaryFields = append(ts.PrimaryFields, field.TagName)
+		}
+	}
+
+	return ts
+}
+
 func (it *FieldSpec) HasAttr(attr string) bool {
 	t, ok := fieldSpecAttrs[attr]
 	if !ok {

@@ -23,6 +23,7 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/lynkdb/lynkapi/go/codec"
@@ -98,11 +99,11 @@ func (it *mgrService) help(fg FlagSet) string {
 
 	var (
 		tbuf  bytes.Buffer
-		table = tablewriter.NewWriter(&tbuf)
+		table = tablewriter.NewTable(&tbuf)
 	)
 
-	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	table.SetAutoWrapText(false)
+	// table.SetAlignment(tablewriter.ALIGN_LEFT)
+	// table.SetAutoWrapText(false)
 
 	if fg.Has("show-request-spec") || fg.Has("show-response-spec") {
 
@@ -114,17 +115,23 @@ func (it *mgrService) help(fg FlagSet) string {
 			headers = append(headers, "Response Spec")
 		}
 
-		table.SetRowLine(true)
-		table.SetHeader(headers)
+		table.Options(tablewriter.WithRendition(tw.Rendition{
+			Settings: tw.Settings{
+				Separators: tw.Separators{BetweenRows: tw.On},
+			},
+		}))
+
+		// table.SetRowLine(true)
+		table.Header(headers)
 
 	} else {
 
-		table.SetRowLine(false)
-		table.SetColumnSeparator("")
-		table.SetHeaderLine(false)
-		table.SetBorder(false)
-		table.EnableBorder(false)
-		table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+		// table.SetRowLine(false)
+		// table.SetColumnSeparator("")
+		// table.SetHeaderLine(false)
+		// table.SetBorder(false)
+		// table.EnableBorder(false)
+		// table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
 	}
 
 	for _, method := range it.methods {
@@ -227,9 +234,16 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.TypeSpec) (string, error) {
 	if specData != nil && len(specField.Fields) > 0 && len(specData.Values) > 0 {
 
 		var (
-			mapFields  = map[string]int{}
-			tbuf       bytes.Buffer
-			table      = tablewriter.NewWriter(&tbuf)
+			mapFields = map[string]int{}
+			tbuf      bytes.Buffer
+			table     = tablewriter.NewTable(&tbuf, tablewriter.WithRendition(tw.Rendition{
+				Settings: tw.Settings{
+					Separators: tw.Separators{ // General row and column separators
+						BetweenRows: tw.On, // Horizontal lines between data rows
+					},
+				},
+			}))
+
 			fieldNames []string
 		)
 
@@ -242,10 +256,17 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.TypeSpec) (string, error) {
 			return "", fmt.Errorf("invalid spec defines")
 		}
 
-		table.SetHeader(fieldNames)
-		table.SetRowLine(true)
-		table.SetAutoWrapText(false)
-		table.SetAlignment(tablewriter.ALIGN_LEFT)
+		table.Header(fieldNames)
+
+		table.Options(tablewriter.WithRendition(tw.Rendition{
+			Settings: tw.Settings{
+				Separators: tw.Separators{BetweenRows: tw.On},
+			},
+		}))
+
+		// table.SetRowLine(true)
+		// table.SetAutoWrapText(false)
+		// table.SetAlignment(tablewriter.ALIGN_LEFT)
 
 		for _, row := range specData.Values {
 
@@ -309,11 +330,17 @@ func iterOutput(data *structpb.Struct, spec *lynkapi.TypeSpec) (string, error) {
 			table = tablewriter.NewWriter(&tbuf)
 		)
 
-		table.SetHeader([]string{"Field", "Value"})
+		table.Options(tablewriter.WithRendition(tw.Rendition{
+			Settings: tw.Settings{
+				Separators: tw.Separators{BetweenRows: tw.On},
+			},
+		}))
 
-		table.SetRowLine(true)
-		table.SetAutoWrapText(false)
-		table.SetAlignment(tablewriter.ALIGN_LEFT)
+		table.Header([]string{"Field", "Value"})
+
+		// table.SetRowLine(true)
+		// table.SetAutoWrapText(false)
+		// table.SetAlignment(tablewriter.ALIGN_LEFT)
 
 		for name, value := range data.Fields {
 

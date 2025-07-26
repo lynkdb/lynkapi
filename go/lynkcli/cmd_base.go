@@ -23,6 +23,7 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 )
 
 var (
@@ -74,18 +75,24 @@ func (cmdHelp) Action(fg FlagSet, l *readline.Instance) (string, error) {
 	// base commands
 	{
 		tbuf.WriteString("Common Commands:\n")
-		var (
-			tableBase = tablewriter.NewWriter(&tbuf)
+
+		tableBase := tablewriter.NewTable(&tbuf,
+			tablewriter.WithRendition(tw.Rendition{
+				Borders: tw.BorderNone,
+				Settings: tw.Settings{
+					Separators: tw.SeparatorsNone,
+				},
+			}),
 		)
 
-		tableBase.SetRowLine(false)
-		tableBase.SetColumnSeparator("")
-		tableBase.SetHeaderLine(false)
-		tableBase.SetBorder(false)
-		tableBase.EnableBorder(false)
-		tableBase.SetAutoWrapText(false)
-		tableBase.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
-		tableBase.SetAlignment(tablewriter.ALIGN_LEFT)
+		// tableBase.SetRowLine(false)
+		// tableBase.SetColumnSeparator("")
+		// tableBase.SetHeaderLine(false)
+		// tableBase.SetBorder(false)
+		// tableBase.EnableBorder(false)
+		// tableBase.SetAutoWrapText(false)
+		// tableBase.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+		// tableBase.SetAlignment(tablewriter.ALIGN_LEFT)
 
 		// table.SetHeader([]string{"Command", "Usage"})
 
@@ -105,18 +112,24 @@ func (cmdHelp) Action(fg FlagSet, l *readline.Instance) (string, error) {
 	// management commands
 	{
 		tbuf.WriteString("\nManagement Commands:\n")
-		var (
-			tableMgr = tablewriter.NewWriter(&tbuf)
+
+		tableMgr := tablewriter.NewTable(&tbuf,
+			tablewriter.WithRendition(tw.Rendition{
+				Borders: tw.BorderNone,
+				Settings: tw.Settings{
+					Separators: tw.SeparatorsNone,
+				},
+			}),
 		)
 
-		tableMgr.SetRowLine(false)
-		tableMgr.SetColumnSeparator("")
-		tableMgr.SetHeaderLine(false)
-		tableMgr.SetBorder(false)
-		tableMgr.EnableBorder(false)
-		tableMgr.SetAutoWrapText(false)
-		tableMgr.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
-		tableMgr.SetAlignment(tablewriter.ALIGN_LEFT)
+		// tableMgr.SetRowLine(false)
+		// tableMgr.SetColumnSeparator("")
+		// tableMgr.SetHeaderLine(false)
+		// tableMgr.SetBorder(false)
+		// tableMgr.EnableBorder(false)
+		// tableMgr.SetAutoWrapText(false)
+		// tableMgr.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+		// tableMgr.SetAlignment(tablewriter.ALIGN_LEFT)
 
 		for _, c := range arrMgrServices {
 			tableMgr.Append([]string{c.lowerName, c.name})
