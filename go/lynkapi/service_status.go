@@ -58,6 +58,10 @@ func NewServerUnavailableError(msg string) error {
 	return NewError(StatusCode_ServiceUnavailable, msg)
 }
 
+func NewServerUnknownError() error {
+	return NewError(StatusCode_Unknown, "Unknown Error")
+}
+
 func NewError(code, msg string) error {
 	return errors.New("#" + code + " " + msg)
 }
@@ -70,17 +74,6 @@ func NewResponseError(code, msg string) *Response {
 			Message: msg,
 		},
 	}
-}
-
-func (it *ServiceStatus) OK() bool {
-	return it.Code == StatusCode_OK
-}
-
-func (it *ServiceStatus) Err() error {
-	if it != nil && it.Code != StatusCode_OK {
-		return errors.New("#" + it.Code + " " + it.Message)
-	}
-	return nil
 }
 
 func NewServiceStatus(code, msg string) *ServiceStatus {
@@ -108,6 +101,19 @@ func NewServiceStatusServerError(msg string) *ServiceStatus {
 		Code:    StatusCode_InternalServerError,
 		Message: msg,
 	}
+}
+
+func (it *ServiceStatus) OK() bool {
+	return it.Code == StatusCode_OK
+}
+
+func (it *ServiceStatus) Error() error {
+	if it == nil {
+		return NewServerUnknownError()
+	} else if it.Code != StatusCode_OK {
+		return errors.New("#" + it.Code + " " + it.Message)
+	}
+	return nil
 }
 
 func ParseError(err error) *ServiceStatus {

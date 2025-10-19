@@ -67,11 +67,17 @@ message DataCol {
 // database
 
 message TableSpec {
+  message Index {
+    string fields = 2;
+    string type = 3;
+  };
+
   string name = 1;  // `x_attrs:"name_identifier"`
   string kind = 2;
   repeated FieldSpec fields = 9;
   repeated string primary_fields = 10;
-  repeated string index_fields = 11;
+  // repeated string index_fields = 11;
+  repeated Index indexes = 12;
 
   string engine = 13;
   string prefix = 14;
@@ -112,7 +118,7 @@ message DataProject {
 
 message DataQuery {
   message Filter {
-    string type = 1;  // `x_enums:",and,or"`
+    string type = 1;  // `x_enums:",and,or,func"`
     string field = 2;
     google.protobuf.Value value = 3;
     repeated Filter inner = 4;
@@ -128,8 +134,9 @@ message DataQuery {
   repeated string fields = 5;
   Filter filter = 6;
   SortFilter sort = 7;
-  string offset = 8;
-  int64 limit = 9;
+  int32 offset = 8;
+  int32 limit = 9;
+  // string page_token = 11;
 }
 
 message DataInsert {
@@ -154,11 +161,20 @@ message DataDelete {
 }
 
 message DataResult {
+  message Stats {
+    int32 rows_returned = 1;
+    int64 rows_hit = 2;
+    int32 offset = 3;
+    int32 limit = 4;
+  };
+
   string kind = 1;
   lynkapi.ServiceStatus status = 2;
   string name = 3;
 
   TableSpec spec = 4;
+
+  Stats stats = 5;
 
   repeated DataRow rows = 9;  // `x_attrs:"rows"`
 

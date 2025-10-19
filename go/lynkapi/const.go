@@ -34,6 +34,8 @@ const (
 	StatusCode_InternalServerError = "5000"
 	StatusCode_NotImplemented      = "5010"
 	StatusCode_ServiceUnavailable  = "5030"
+
+	StatusCode_Unknown = "0000"
 )
 
 type DataMerge_Type int

@@ -421,7 +421,7 @@ func (it *Response) OK() bool {
 
 func (it *Response) Err() error {
 	if it.Status != nil {
-		return it.Status.Err()
+		return it.Status.Error()
 	}
 	return NewError(StatusCode_InternalServerError, "unknown error")
 }

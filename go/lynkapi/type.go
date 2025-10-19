@@ -45,6 +45,16 @@ const (
 	fieldSpec_AnyTypeUri = "google.golang.org/protobuf/types/known/structpb.Value"
 )
 
+var FieldSpec_Types = map[string]string{
+	FieldSpec_Bool:   "bool",
+	FieldSpec_Int:    "int",
+	FieldSpec_Uint:   "uint",
+	FieldSpec_Float:  "float",
+	FieldSpec_String: "string",
+	FieldSpec_Struct: "struct",
+	FieldSpec_Bytes:  "bytes",
+}
+
 var fieldSpecAttrs = map[string]int{
 	"primary_key": 1,
 	"unique_key":  1,
