@@ -107,7 +107,7 @@ func (it *ServiceStatus) OK() bool {
 	return it.Code == StatusCode_OK
 }
 
-func (it *ServiceStatus) Error() error {
+func (it *ServiceStatus) Err() error {
 	if it == nil {
 		return NewServerUnknownError()
 	} else if it.Code != StatusCode_OK {

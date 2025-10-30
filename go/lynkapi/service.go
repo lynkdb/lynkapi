@@ -19,7 +19,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/hooto/hlog4g/hlog"
@@ -98,7 +102,10 @@ func (it *LynkService) RegisterService(st any) error {
 	it.mu.Lock()
 	defer it.mu.Unlock()
 
-	srvName := rt.Elem().Name()
+	var (
+		srvName      = rt.Elem().Name()
+		aliasSrvName = ""
+	)
 
 	srv, ok := it.mapServices[srvName]
 	if !ok {
@@ -115,6 +122,13 @@ func (it *LynkService) RegisterService(st any) error {
 		it.services = append(it.services, srv.instance)
 
 		hlog.Printf("info", "lynkapi service: init service instance %s", srv.instance.Name)
+	}
+
+	if strings.HasSuffix(srvName, "Service") {
+		aliasSrvName = srvName[:len(srvName)-len("Service")]
+		if _, ok = it.mapServices[aliasSrvName]; ok {
+			aliasSrvName = ""
+		}
 	}
 
 	// common methods
@@ -217,7 +231,7 @@ func (it *LynkService) RegisterService(st any) error {
 		hlog.Printf("info", "lynkapi init service instance %s, method %s",
 			srv.instance.Name, method.Name)
 
-		it.mapServiceMethods[srvName+"."+method.Name] = &serviceMethod{
+		callMethod := &serviceMethod{
 			method:          srvMethod,
 			reqType:         reqType,
 			rspType:         rspType,
@@ -225,6 +239,12 @@ func (it *LynkService) RegisterService(st any) error {
 			refMethod:       method,
 			refServiceValue: srv.refServiceValue,
 			refPreMethod:    srv.preMethod,
+		}
+
+		it.mapServiceMethods[srvName+"."+method.Name] = callMethod
+
+		if aliasSrvName != "" {
+			it.mapServiceMethods[aliasSrvName+"."+method.Name] = callMethod
 		}
 	}
 
@@ -280,7 +300,8 @@ func (it *LynkService) Exec(
 
 	method := it.lookup(req)
 	if method == nil {
-		return NewResponseError(StatusCode_NotFound, "service/method not found"), nil
+		return NewResponseError(StatusCode_NotFound,
+			fmt.Sprintf("service(%s)/method(%s) not found", req.ServiceName, req.MethodName)), nil
 	}
 
 	js, err := json.Marshal(req.Data)
@@ -406,6 +427,119 @@ func (it *LynkService) DataDelete(
 	return ds.Delete(req)
 }
 
+func (it *LynkService) HttpHandler(w http.ResponseWriter, r *http.Request) {
+
+	exec := func(w http.ResponseWriter, r *http.Request) *Response {
+
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			return NewResponseError(StatusCode_BadRequest, err.Error())
+		}
+
+		if len(b) == 0 {
+			b = []byte("{}")
+		}
+
+		ps := strings.Split(filepath.Clean(r.URL.Path), "/")
+		if len(ps) < 3 {
+			return NewResponseError(StatusCode_BadRequest, "invalid request URL")
+		}
+
+		var (
+			serviceName = strings.ReplaceAll(strings.Title(ps[len(ps)-2]), "-", "")
+			methodName  = strings.ReplaceAll(strings.Title(ps[len(ps)-1]), "-", "")
+		)
+
+		it.mu.Lock()
+		method, ok := it.mapServiceMethods[serviceName+"."+methodName]
+		it.mu.Unlock()
+
+		if !ok || method == nil {
+			return NewResponseError(StatusCode_NotFound,
+				fmt.Sprintf("service(%s)/method(%s) not found", serviceName, methodName))
+		}
+
+		reqData := reflect.New(method.reqType).Interface()
+		if err := json.Unmarshal(b, reqData); err != nil {
+			return NewResponseError(StatusCode_BadRequest, err.Error())
+		}
+
+		ctx := context.WithValue(context.TODO(), RequestSpecNameInContext, method.method.RequestSpec)
+
+		ctx = &xContext{Context: ctx, request: r}
+
+		if method.refPreMethod != nil {
+			prs := method.refPreMethod.Func.Call([]reflect.Value{
+				method.refServiceValue,
+				reflect.ValueOf(ctx),
+			})
+			if err := prs[0].Interface(); err != nil {
+				return NewResponseError(StatusCode_BadRequest, err.(error).Error())
+			}
+		}
+
+		var rss []reflect.Value
+
+		switch method.funType {
+		case kServiceMethodType_Std:
+			rss = method.refMethod.Func.Call([]reflect.Value{
+				method.refServiceValue,
+				reflect.ValueOf(&xContext{
+					Context: ctx,
+					spec:    method.method.RequestSpec,
+				}),
+				reflect.ValueOf(reqData),
+			})
+
+		case kServiceMethodType_Grpc:
+			rss = method.refMethod.Func.Call([]reflect.Value{
+				method.refServiceValue,
+				reflect.ValueOf(ctx),
+				reflect.ValueOf(reqData),
+			})
+
+		default:
+			return NewResponseError(StatusCode_InternalServerError, "unspec method type")
+		}
+
+		if err := rss[1].Interface(); err != nil {
+			return NewResponseError(StatusCode_InternalServerError, err.(error).Error())
+		}
+
+		js, err := json.Marshal(rss[0].Interface())
+		if err != nil {
+			return NewResponseError(StatusCode_InternalServerError, err.Error())
+		}
+		var data structpb.Struct
+		if err = json.Unmarshal(js, &data); err != nil {
+			return NewResponseError(StatusCode_InternalServerError, err.Error())
+		}
+
+		return &Response{
+			Kind: method.method.ResponseSpec.Kind,
+			Data: &data,
+		}
+	}
+
+	rsp := exec(w, r)
+	if rsp.Status == nil {
+		rsp.Status = NewServiceStatusOK()
+	}
+
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-type", "application/json")
+
+	js, _ := json.Marshal(rsp)
+	w.Write(js)
+}
+
+func (c LynkService) IndexAction() {
+
+	c.RenderJson(&ApiListResponse{
+		Services: c.services,
+	})
+}
+
 func (c LynkService) ApiListAction() {
 	c.RenderJson(&ApiListResponse{
 		Services: c.services,
@@ -421,9 +555,16 @@ func (it *Response) OK() bool {
 
 func (it *Response) Err() error {
 	if it.Status != nil {
-		return it.Status.Error()
+		return it.Status.Err()
 	}
 	return NewError(StatusCode_InternalServerError, "unknown error")
+}
+
+func (it *Response) StatusCode() string {
+	if it.Status != nil {
+		return it.Status.Code
+	}
+	return StatusCode_Unknown
 }
 
 func (it *Response) Decode(obj any) error {

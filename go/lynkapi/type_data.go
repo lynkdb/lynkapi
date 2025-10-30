@@ -466,20 +466,28 @@ func specDataMerge(spec *TypeSpec, dstObject, srcObject any, opts ...any) (bool,
 	return chg, err
 }
 
-func NewRequestFromObject(serviceName, methodName string, obj any) (*Request, error) {
-	js, err := json.Marshal(obj)
-	if err != nil {
-		return nil, err
-	}
-	var data structpb.Struct
-	if err = json.Unmarshal(js, &data); err != nil {
-		return nil, err
-	}
-	return &Request{
+func NewRequest(serviceName, methodName string, obj any) *Request {
+
+	req := &Request{
 		ServiceName: serviceName,
 		MethodName:  methodName,
-		Data:        &data,
-	}, nil
+	}
+
+	if obj != nil {
+
+		if js, err := json.Marshal(obj); err != nil {
+			req.Error = err.Error()
+		} else {
+			var data structpb.Struct
+			if err = json.Unmarshal(js, &data); err != nil {
+				req.Error = err.Error()
+			} else {
+				req.Data = &data
+			}
+		}
+	}
+
+	return req
 }
 
 func ConvertReflectValueToApiValue(value reflect.Value) (*structpb.Value, error) {

@@ -14,43 +14,20 @@
 
 package lynkapi
 
-import (
-	"context"
-	"net/http"
-)
-
-type Context interface {
-	context.Context
-	RequestSpec() *TypeSpec
-}
-
-type xContext struct {
-	context.Context
-	request *http.Request
-	spec    *TypeSpec
-}
-
-func (it *xContext) RequestSpec() *TypeSpec {
-	return it.spec
-}
-
-func (it *xContext) Value(key any) any {
-	if it == nil || key == nil {
-		return nil
-	}
-	if val := it.Context.Value(key); val != nil {
-		return val
-	}
-	if it.request != nil {
-		switch key.(type) {
-		case string:
-			if val := it.request.Header.Get(key.(string)); val != "" {
-				return val
-			}
-			if val, err := it.request.Cookie(key.(string)); err == nil {
-				return val.Value
-			}
+func SlicesSearchFunc[T any](s []*T, cmp func(*T) bool) *T {
+	for _, e := range s {
+		if cmp(e) {
+			return e
 		}
 	}
 	return nil
+}
+
+func SlicesDeleteFunc[T any](s []*T, cmp func(*T) bool) ([]*T, bool) {
+	for i, e := range s {
+		if cmp(e) {
+			return append(s[:i], s[i+1:]...), true
+		}
+	}
+	return s, false
 }

@@ -28,12 +28,12 @@ func (it *DataResult) OK() bool {
 	return false
 }
 
-func (it *DataResult) Error() error {
+func (it *DataResult) Err() error {
 	if it.Status != nil {
 		if it.Status.Code == StatusCode_OK {
 			return nil
 		}
-		return it.Status.Error()
+		return it.Status.Err()
 	}
 	return NewServerUnknownError()
 }

@@ -38,7 +38,7 @@ type TLSCertConfig struct {
 	CertData string `toml:"cert_data" json:"cert_data"`
 }
 
-const grpcMsgByteMax = 8 << 20
+const grpcMsgByteMax = 16 << 20
 
 type LynkServer struct {
 	cfg        *ServerConfig
