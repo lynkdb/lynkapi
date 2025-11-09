@@ -23,12 +23,14 @@ const (
 	StatusCode_OK = "2000"
 
 	// Client error responses
-	StatusCode_BadRequest = "4000"
-	StatusCode_UnAuth     = "4010"
-	StatusCode_NotFound   = "4040"
-	StatusCode_Timeout    = "4080"
-	StatusCode_Conflict   = "4090"
-	StatusCode_RateLimit  = "4290"
+	StatusCode_BadRequest  = "4000"
+	StatusCode_UnAuth      = "4010"
+	StatusCode_AuthExpired = "4011"
+	StatusCode_AuthDenied  = "4030"
+	StatusCode_NotFound    = "4040"
+	StatusCode_Timeout     = "4080"
+	StatusCode_Conflict    = "4090"
+	StatusCode_RateLimit   = "4290"
 
 	// Server error responses
 	StatusCode_InternalServerError = "5000"

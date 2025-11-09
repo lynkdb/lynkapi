@@ -30,6 +30,14 @@ func NewUnAuthError(msg string) error {
 	return NewError(StatusCode_UnAuth, msg)
 }
 
+func NewAuthExpiredError(msg string) error {
+	return NewError(StatusCode_AuthExpired, msg)
+}
+
+func NewAuthDeniedError(msg string) error {
+	return NewError(StatusCode_AuthDenied, msg)
+}
+
 func NewNotFoundError(msg string) error {
 	return NewError(StatusCode_NotFound, msg)
 }
@@ -63,10 +71,12 @@ func NewServerUnknownError() error {
 }
 
 func NewError(code, msg string) error {
+	code, msg = fixCodeMsg(code, msg)
 	return errors.New("#" + code + " " + msg)
 }
 
 func NewResponseError(code, msg string) *Response {
+	code, msg = fixCodeMsg(code, msg)
 	return &Response{
 		Kind: "Error",
 		Status: &ServiceStatus{
@@ -74,6 +84,14 @@ func NewResponseError(code, msg string) *Response {
 			Message: msg,
 		},
 	}
+}
+
+func fixCodeMsg(code, msg string) (string, string) {
+	if len(msg) > 6 && msg[0] == '#' && msg[5] == ' ' {
+		code = msg[1:5]
+		msg = msg[6:]
+	}
+	return code, msg
 }
 
 func NewServiceStatus(code, msg string) *ServiceStatus {

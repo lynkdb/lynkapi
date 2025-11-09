@@ -34,6 +34,7 @@ const _ = grpc.SupportPackageIsVersion7
 
 const (
 	LynkService_ApiList_FullMethodName     = "/lynkapi.LynkService/ApiList"
+	LynkService_Auth_FullMethodName        = "/lynkapi.LynkService/Auth"
 	LynkService_Exec_FullMethodName        = "/lynkapi.LynkService/Exec"
 	LynkService_DataProject_FullMethodName = "/lynkapi.LynkService/DataProject"
 	LynkService_DataQuery_FullMethodName   = "/lynkapi.LynkService/DataQuery"
@@ -46,6 +47,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type LynkServiceClient interface {
 	ApiList(ctx context.Context, in *ApiListRequest, opts ...grpc.CallOption) (*ApiListResponse, error)
+	Auth(ctx context.Context, in *AuthRequest, opts ...grpc.CallOption) (*AuthResponse, error)
 	Exec(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	DataProject(ctx context.Context, in *DataProjectRequest, opts ...grpc.CallOption) (*DataProjectResponse, error)
 	DataQuery(ctx context.Context, in *DataQuery, opts ...grpc.CallOption) (*DataResult, error)
@@ -64,6 +66,15 @@ func NewLynkServiceClient(cc grpc.ClientConnInterface) LynkServiceClient {
 func (c *lynkServiceClient) ApiList(ctx context.Context, in *ApiListRequest, opts ...grpc.CallOption) (*ApiListResponse, error) {
 	out := new(ApiListResponse)
 	err := c.cc.Invoke(ctx, LynkService_ApiList_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *lynkServiceClient) Auth(ctx context.Context, in *AuthRequest, opts ...grpc.CallOption) (*AuthResponse, error) {
+	out := new(AuthResponse)
+	err := c.cc.Invoke(ctx, LynkService_Auth_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +131,7 @@ func (c *lynkServiceClient) DataIgsert(ctx context.Context, in *DataInsert, opts
 // for forward compatibility
 type LynkServiceServer interface {
 	ApiList(context.Context, *ApiListRequest) (*ApiListResponse, error)
+	Auth(context.Context, *AuthRequest) (*AuthResponse, error)
 	Exec(context.Context, *Request) (*Response, error)
 	DataProject(context.Context, *DataProjectRequest) (*DataProjectResponse, error)
 	DataQuery(context.Context, *DataQuery) (*DataResult, error)
@@ -134,6 +146,9 @@ type UnimplementedLynkServiceServer struct {
 
 func (UnimplementedLynkServiceServer) ApiList(context.Context, *ApiListRequest) (*ApiListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApiList not implemented")
+}
+func (UnimplementedLynkServiceServer) Auth(context.Context, *AuthRequest) (*AuthResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Auth not implemented")
 }
 func (UnimplementedLynkServiceServer) Exec(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Exec not implemented")
@@ -177,6 +192,24 @@ func _LynkService_ApiList_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LynkServiceServer).ApiList(ctx, req.(*ApiListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _LynkService_Auth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LynkServiceServer).Auth(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LynkService_Auth_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LynkServiceServer).Auth(ctx, req.(*AuthRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -281,6 +314,10 @@ var LynkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApiList",
 			Handler:    _LynkService_ApiList_Handler,
+		},
+		{
+			MethodName: "Auth",
+			Handler:    _LynkService_Auth_Handler,
 		},
 		{
 			MethodName: "Exec",

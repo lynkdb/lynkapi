@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/encoding/gzip"
 
+	hauth2 "github.com/hooto/hauth/v2/hauth"
 	"github.com/hooto/hlog4g/hlog"
 )
 
@@ -72,6 +73,10 @@ func (it *LynkServer) Run() error {
 		}
 	}()
 	return nil
+}
+
+func (it *LynkServer) SetupIdentityAuthService(s hauth2.IdentityAuthService) {
+	it.Service.identityAuthService = s
 }
 
 func (it *LynkServer) grpcSetup() error {

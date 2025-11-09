@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 
+	hauth2 "github.com/hooto/hauth/v2/hauth"
 	"github.com/hooto/hlog4g/hlog"
 	"github.com/hooto/httpsrv"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -41,6 +42,8 @@ type LynkService struct {
 	mapServices map[string]*serviceInstance
 
 	mapServiceMethods map[string]*serviceMethod
+
+	identityAuthService hauth2.IdentityAuthService
 
 	dataProject *dataProjectManager
 }
@@ -136,14 +139,16 @@ func (it *LynkService) RegisterService(st any) error {
 
 		method := rt.Method(i)
 
-		if method.Name == "PreMethod" && method.Type.NumIn() == 2 && method.Type.NumOut() == 1 {
+		if method.Name == "PreMethod" && method.Type.NumIn() == 2 && method.Type.NumOut() == 2 {
 
 			var (
 				reqCtx = method.Type.In(1)
-				rspErr = method.Type.Out(0)
+				rspCtx = method.Type.Out(0)
+				rspErr = method.Type.Out(1)
 			)
 
 			if reqCtx.PkgPath() == "context" && reqCtx.Name() == "Context" &&
+				rspCtx.PkgPath() == "context" && rspCtx.Name() == "Context" &&
 				rspErr.PkgPath() == "" && rspErr.Name() == "error" {
 				srv.preMethod = &method
 				break
@@ -293,6 +298,30 @@ func (it *LynkService) ApiMethod(
 	return method, nil
 }
 
+func (it *LynkService) Auth(
+	ctx context.Context,
+	req *AuthRequest,
+) (*AuthResponse, error) {
+	if it.identityAuthService == nil {
+		return nil, fmt.Errorf("IdentityAuthService not setup")
+	}
+
+	rsp, err := it.identityAuthService.AuthLogin(&hauth2.AuthLoginRequest{
+		LoginToken: req.LoginToken,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if rsp.Error != "" {
+		return nil, errors.New(rsp.Error)
+	}
+
+	return &AuthResponse{
+		AccessToken: rsp.AccessToken,
+	}, nil
+}
+
 func (it *LynkService) Exec(
 	ctx context.Context,
 	req *Request,
@@ -324,7 +353,12 @@ func (it *LynkService) Exec(
 			method.refServiceValue,
 			reflect.ValueOf(ctx),
 		})
-		if err := prs[0].Interface(); err != nil {
+		if ctx2 := prs[0].Interface(); ctx2 == nil {
+			return NewResponseError(StatusCode_BadRequest, "context not return"), nil
+		} else {
+			ctx = ctx2.(context.Context)
+		}
+		if err := prs[1].Interface(); err != nil {
 			return NewResponseError(StatusCode_BadRequest, err.(error).Error()), nil
 		}
 	}
@@ -473,7 +507,12 @@ func (it *LynkService) HttpHandler(w http.ResponseWriter, r *http.Request) {
 				method.refServiceValue,
 				reflect.ValueOf(ctx),
 			})
-			if err := prs[0].Interface(); err != nil {
+			if ctx2 := prs[0].Interface(); ctx2 == nil {
+				return NewResponseError(StatusCode_BadRequest, "context not return")
+			} else {
+				ctx = ctx2.(context.Context)
+			}
+			if err := prs[1].Interface(); err != nil {
 				return NewResponseError(StatusCode_BadRequest, err.(error).Error())
 			}
 		}
